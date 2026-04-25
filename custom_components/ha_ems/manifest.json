@@ -1,0 +1,12 @@
+{
+  "domain": "ha_ems",
+  "name": "Home Assistant Energy Management System",
+  "version": "0.1.0",
+  "documentation": "https://github.com/yourusername/ha-ems",
+  "issue_tracker": "https://github.com/yourusername/ha-ems/issues",
+  "requirements": [],
+  "codeowners": ["@yourusername"],
+  "config_flow": true,
+  "iot_class": "local_polling",
+  "homeassistant": "2024.12.0"
+}

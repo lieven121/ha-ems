@@ -1,0 +1,97 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Price Data Source",
+        "description": "Configure the entity that provides energy price data.",
+        "data": {
+          "price_entity_id": "Price Entity",
+          "price_attribute": "Price Attribute Name",
+          "start_key": "Slot Start Key",
+          "price_key": "Price Key",
+          "injection_price_key": "Injection Price Key (optional)"
+        },
+        "data_description": {
+          "price_entity_id": "Sensor entity whose attributes contain the price list (e.g. sensor.nordpool_kwh_be_eur_3).",
+          "price_attribute": "Attribute name that holds the list of price entries (default: data).",
+          "start_key": "Key inside each price entry that holds the slot start time (default: start).",
+          "price_key": "Key inside each price entry that holds the price value (default: price).",
+          "injection_price_key": "Key for the sell-back / injection price. Leave empty if not available."
+        }
+      },
+      "battery": {
+        "title": "Battery Configuration",
+        "description": "Optional battery settings for SoC prediction and optimisation.",
+        "data": {
+          "battery_entity_id": "Battery SoC Entity (optional)",
+          "battery_size_kwh": "Battery Capacity (kWh, optional)",
+          "roundtrip_loss_pct": "Round-trip Loss (%)"
+        },
+        "data_description": {
+          "battery_entity_id": "Number or sensor entity that reports the current State of Charge in %.",
+          "battery_size_kwh": "Usable capacity of the battery in kWh.",
+          "roundtrip_loss_pct": "Energy lost in a full charge-discharge cycle (default: 20 %)."
+        }
+      }
+    },
+    "error": {
+      "invalid_entity": "The selected entity does not exist in Home Assistant."
+    }
+  },
+  "options": {
+    "step": {
+      "user": {
+        "title": "Price Data Source",
+        "description": "Update the price data source configuration.",
+        "data": {
+          "price_entity_id": "Price Entity",
+          "price_attribute": "Price Attribute Name",
+          "start_key": "Slot Start Key",
+          "price_key": "Price Key",
+          "injection_price_key": "Injection Price Key (optional)"
+        }
+      },
+      "battery": {
+        "title": "Battery Configuration",
+        "description": "Update battery settings.",
+        "data": {
+          "battery_entity_id": "Battery SoC Entity (optional)",
+          "battery_size_kwh": "Battery Capacity (kWh, optional)",
+          "roundtrip_loss_pct": "Round-trip Loss (%)"
+        }
+      }
+    },
+    "abort": {
+      "changes_saved": "Configuration updated successfully."
+    },
+    "error": {
+      "invalid_entity": "The selected entity does not exist in Home Assistant."
+    }
+  },
+  "entity": {
+    "number": {
+      "ems_min_battery": {
+        "name": "EMS Min Battery"
+      },
+      "ems_max_battery": {
+        "name": "EMS Max Battery"
+      },
+      "ems_avg_consumption": {
+        "name": "EMS Avg Consumption"
+      }
+    },
+    "switch": {
+      "ems_allow_discharge": {
+        "name": "EMS Allow Discharge"
+      }
+    },
+    "sensor": {
+      "ems_planning": {
+        "name": "EMS Planning"
+      },
+      "ems_current_action": {
+        "name": "EMS Current Action"
+      }
+    }
+  }
+}

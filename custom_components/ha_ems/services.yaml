@@ -1,0 +1,341 @@
+planning_idle:
+  name: "Planning - Idle"
+  description: "Set a time slot to idle (no battery action)."
+  fields:
+    device_id:
+      name: "EMS Device"
+      description: "The EMS device to target."
+      required: true
+      selector:
+        device:
+          integration: ha_ems
+    time:
+      name: "Slot Time"
+      description: "ISO timestamp of the slot (e.g. 2024-01-01T14:00:00+01:00). Must match the exact string from the price feed."
+      required: true
+      selector:
+        text:
+    locked:
+      name: "Locked"
+      description: "Lock this slot against future optimizer runs."
+      default: false
+      selector:
+        boolean:
+
+planning_charge:
+  name: "Planning - Charge"
+  description: "Set a time slot to charge the battery."
+  fields:
+    device_id:
+      name: "EMS Device"
+      description: "The EMS device to target."
+      required: true
+      selector:
+        device:
+          integration: ha_ems
+    time:
+      name: "Slot Time"
+      description: "ISO timestamp of the slot."
+      required: true
+      selector:
+        text:
+    locked:
+      name: "Locked"
+      description: "Lock this slot against future optimizer runs."
+      default: false
+      selector:
+        boolean:
+    wattage:
+      name: "Wattage (W)"
+      description: "Charging power in watts."
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 100000
+          unit_of_measurement: "W"
+          mode: box
+    until_pct:
+      name: "Until (%)"
+      description: "Stop charging when battery SoC reaches this percentage."
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+          mode: box
+
+planning_discharge:
+  name: "Planning - Discharge"
+  description: "Set a time slot to discharge the battery."
+  fields:
+    device_id:
+      name: "EMS Device"
+      description: "The EMS device to target."
+      required: true
+      selector:
+        device:
+          integration: ha_ems
+    time:
+      name: "Slot Time"
+      description: "ISO timestamp of the slot."
+      required: true
+      selector:
+        text:
+    locked:
+      name: "Locked"
+      description: "Lock this slot against future optimizer runs."
+      default: false
+      selector:
+        boolean:
+    wattage:
+      name: "Wattage (W)"
+      description: "Discharging power in watts."
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 100000
+          unit_of_measurement: "W"
+          mode: box
+    until_pct:
+      name: "Until (%)"
+      description: "Stop discharging when battery SoC reaches this percentage."
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+          mode: box
+
+planning_use_net:
+  name: "Planning - Use Net"
+  description: "Set a time slot to draw from the grid (battery idle)."
+  fields:
+    device_id:
+      name: "EMS Device"
+      description: "The EMS device to target."
+      required: true
+      selector:
+        device:
+          integration: ha_ems
+    time:
+      name: "Slot Time"
+      description: "ISO timestamp of the slot."
+      required: true
+      selector:
+        text:
+    locked:
+      name: "Locked"
+      description: "Lock this slot against future optimizer runs."
+      default: false
+      selector:
+        boolean:
+    max_wattage:
+      name: "Max Wattage (W)"
+      description: "Maximum grid draw in watts (optional cap)."
+      selector:
+        number:
+          min: 0
+          max: 100000
+          unit_of_measurement: "W"
+          mode: box
+    use_solar:
+      name: "Use Solar"
+      description: "Whether to prefer solar production for this slot."
+      default: false
+      selector:
+        boolean:
+
+planning_car_charge_slot:
+  name: "Planning - Car Charge (Slot)"
+  description: "Set a single time slot to car_charge action."
+  fields:
+    device_id:
+      name: "EMS Device"
+      description: "The EMS device to target."
+      required: true
+      selector:
+        device:
+          integration: ha_ems
+    time:
+      name: "Slot Time"
+      description: "ISO timestamp of the slot."
+      required: true
+      selector:
+        text:
+    locked:
+      name: "Locked"
+      description: "Lock this slot against future optimizer runs."
+      default: false
+      selector:
+        boolean:
+    use_solar:
+      name: "Use Solar"
+      description: "Car charger should prefer solar power for this slot."
+      default: true
+      selector:
+        boolean:
+    use_net_wattage:
+      name: "Net Wattage (W)"
+      description: "Grid draw for car charging (W)."
+      selector:
+        number:
+          min: 0
+          max: 100000
+          unit_of_measurement: "W"
+          mode: box
+    use_battery_wattage:
+      name: "Battery Wattage (W)"
+      description: "Battery contribution for car charging (W). 0 to use only grid."
+      selector:
+        number:
+          min: 0
+          max: 100000
+          unit_of_measurement: "W"
+          mode: box
+    use_battery_until_pct:
+      name: "Battery Until (%)"
+      description: "Stop using battery when SoC drops to this %."
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+          mode: box
+
+planning_charge_car:
+  name: "Planning - Charge Car"
+  description: "Reserve the cheapest slots within a time window for car charging."
+  fields:
+    device_id:
+      name: "EMS Device"
+      description: "The EMS device to target."
+      required: true
+      selector:
+        device:
+          integration: ha_ems
+    start_time:
+      name: "Window Start"
+      description: "Start of the allowed charging window (ISO timestamp)."
+      required: true
+      selector:
+        text:
+    stop_time:
+      name: "Window Stop"
+      description: "End of the allowed charging window (ISO timestamp)."
+      required: true
+      selector:
+        text:
+    max_price:
+      name: "Max Price"
+      description: "Maximum acceptable price per kWh. Slots above this price are excluded."
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 10000
+          step: 0.01
+          mode: box
+    slots_wanted:
+      name: "Slots Wanted"
+      description: "Number of cheapest slots to reserve for car charging."
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 96
+          mode: box
+    use_solar:
+      name: "Use Solar"
+      description: "Car charger should prefer solar power."
+      default: true
+      selector:
+        boolean:
+    use_net_wattage:
+      name: "Net Wattage (W)"
+      description: "Grid draw for car charging (W)."
+      selector:
+        number:
+          min: 0
+          max: 100000
+          unit_of_measurement: "W"
+          mode: box
+    use_battery_wattage:
+      name: "Battery Wattage (W)"
+      description: "Battery contribution for car charging (W). 0 to use only grid."
+      selector:
+        number:
+          min: 0
+          max: 100000
+          unit_of_measurement: "W"
+          mode: box
+    use_battery_until_pct:
+      name: "Battery Until (%)"
+      description: "Stop using battery when SoC drops to this %."
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+          mode: box
+
+planning_lock:
+  name: "Planning - Lock"
+  description: "Lock or unlock a range of slots to protect them from the optimizer."
+  fields:
+    device_id:
+      name: "EMS Device"
+      description: "The EMS device to target."
+      required: true
+      selector:
+        device:
+          integration: ha_ems
+    start:
+      name: "Start"
+      description: "Start slot ISO timestamp."
+      required: true
+      selector:
+        text:
+    end:
+      name: "End"
+      description: "End slot ISO timestamp (inclusive). If omitted, only the start slot is affected."
+      selector:
+        text:
+    lock:
+      name: "Lock"
+      description: "True to lock slots, False to unlock."
+      default: true
+      selector:
+        boolean:
+
+planning_clear:
+  name: "Planning - Clear"
+  description: "Reset all manual planning overrides."
+  fields:
+    device_id:
+      name: "EMS Device"
+      description: "The EMS device to target."
+      required: true
+      selector:
+        device:
+          integration: ha_ems
+    clear_locked:
+      name: "Clear Locked"
+      description: "Also clear slots that were explicitly locked."
+      default: false
+      selector:
+        boolean:
+
+planning_optimize:
+  name: "Planning - Optimize"
+  description: "Re-run the optimizer for all unlocked non-car-charge slots."
+  fields:
+    device_id:
+      name: "EMS Device"
+      description: "The EMS device to target."
+      required: true
+      selector:
+        device:
+          integration: ha_ems
+
