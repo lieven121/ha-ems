@@ -1,0 +1,37 @@
+# Node / build
+node_modules/
+dist/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.eggs/
+
+# Home Assistant dev
+.storage/
+.HA_VERSION
+home-assistant.log
+home-assistant_v2.db
+secrets.yaml
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.*
+
+# Test / misc
+TESTING.md
+*.html
+*.yaml
+!hacs.json

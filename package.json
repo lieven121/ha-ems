@@ -2,8 +2,8 @@
   "name": "ems-dashboard",
   "private": true,
   "scripts": {
-    "build": "esbuild src/ems.ts --bundle --outfile=www/ems-dashboard-card.js --format=esm",
-    "watch": "esbuild src/ems.ts --bundle --outfile=www/ems-dashboard-card.js --format=esm --watch"
+    "build": "esbuild src/ems.ts --bundle --outfile=www/ha-ems.js --format=esm && node -e \"const fs=require('fs');fs.mkdirSync('custom_components/ha_ems/www',{recursive:true});fs.copyFileSync('www/ha-ems.js','custom_components/ha_ems/www/ha-ems.js')\"",
+    "watch": "esbuild src/ems.ts --bundle --outfile=www/ha-ems.js --format=esm --watch"
   },
   "devDependencies": {
     "esbuild": "^0.21.5",

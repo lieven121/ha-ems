@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -12,6 +13,17 @@ from .coordinator import EMSCoordinator
 from .services import async_register_services, async_unregister_services
 
 _LOGGER = logging.getLogger(__name__)
+
+_CARD_URL  = "/ha_ems/ha-ems.js"
+_CARD_FILE = Path(__file__).parent / "www" / "ha-ems.js"
+
+
+async def async_setup(hass: HomeAssistant, _config: dict) -> bool:
+    """Register the Lovelace card as a static resource (once per HA start)."""
+    if _CARD_FILE.exists():
+        hass.http.register_static_path(_CARD_URL, str(_CARD_FILE), cache_headers=False)
+        _LOGGER.debug("HA-EMS card registered at %s", _CARD_URL)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
