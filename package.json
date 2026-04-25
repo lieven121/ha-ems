@@ -1,0 +1,12 @@
+{
+  "name": "ems-dashboard",
+  "private": true,
+  "scripts": {
+    "build": "esbuild src/ems.ts --bundle --outfile=www/ems-dashboard-card.js --format=esm",
+    "watch": "esbuild src/ems.ts --bundle --outfile=www/ems-dashboard-card.js --format=esm --watch"
+  },
+  "devDependencies": {
+    "esbuild": "^0.21.5",
+    "typescript": "^5.4.5"
+  }
+}
