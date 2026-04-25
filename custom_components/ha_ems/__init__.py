@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
@@ -21,7 +22,9 @@ _CARD_FILE = Path(__file__).parent / "www" / "ha-ems.js"
 async def async_setup(hass: HomeAssistant, _config: dict) -> bool:
     """Register the Lovelace card as a static resource (once per HA start)."""
     if _CARD_FILE.exists():
-        hass.http.register_static_path(_CARD_URL, str(_CARD_FILE), cache_headers=False)
+        await hass.http.async_register_static_paths(
+            [StaticPathConfig(_CARD_URL, str(_CARD_FILE), cache_headers=False)]
+        )
         _LOGGER.debug("HA-EMS card registered at %s", _CARD_URL)
     return True
 
