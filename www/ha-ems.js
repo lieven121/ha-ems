@@ -210,7 +210,15 @@ header span{font-family:var(--code-font-family, monospace);font-size:10px;color:
 .car-sep{width:1px;background:var(--border);flex-shrink:0;margin:0 4px;}
 .action-locked-row{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);}
 .action-locked-label{font-family:var(--code-font-family,monospace);font-size:9px;color:var(--text-dim);}
-.action-apply-btn{margin-top:10px;width:100%;padding:9px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-family:var(--code-font-family,monospace);font-size:12px;font-weight:600;cursor:pointer;transition:background .12s;}
+.action-btn-row{display:flex;gap:6px;margin-top:10px;}
+.action-copy-btn,.action-paste-btn{display:flex;align-items:center;justify-content:center;padding:8px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-dim);cursor:pointer;transition:background .12s,color .12s,border-color .12s;--mdc-icon-size:18px;}
+.action-copy-btn:hover{background:var(--border);color:var(--text-bright);}
+.action-copy-btn.success{background:#16a34a;color:#fff;border-color:#16a34a;}
+.action-paste-btn:not([disabled]):hover{background:var(--border);color:var(--text-bright);}
+.action-paste-btn[disabled]{opacity:0.35;cursor:default;}
+.action-paste-btn.success{background:#16a34a;color:#fff;border-color:#16a34a;}
+.action-paste-btn.error{background:#dc2626;color:#fff;border-color:#dc2626;}
+.action-apply-btn{flex:1;padding:9px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-family:var(--code-font-family,monospace);font-size:12px;font-weight:600;cursor:pointer;transition:background .12s;}
 .action-apply-btn:hover{background:#2563eb;}
 .action-apply-btn.success{background:#16a34a;}
 .action-apply-btn.error{background:#dc2626;}
@@ -501,6 +509,14 @@ function scrollToSlot(sr, totalSlots, i, instant) {
 }
 
 // src/dashboard/dashboard-dialog.ts
+var _clipboard = null;
+var ACTION_LABELS = {
+  idle: "Idle",
+  charge: "Charge",
+  discharge: "Discharge",
+  use_net: "Use Net",
+  car_charge: "Car Charge"
+};
 function renderPopup(ctx) {
   const { sr, slots, config, hass, kwpEntityId, devColors } = ctx;
   const i = ctx.slotIdx;
@@ -648,7 +664,11 @@ function renderPopup(ctx) {
         <input type="checkbox" id="action-locked" ${slot.locked ? "checked" : ""}>
         <span class="action-locked-label">Locked (prevent auto-replanning)</span>
       </div>
-      <button class="action-apply-btn" id="action-apply">Apply</button>
+      <div class="action-btn-row">
+        <button class="action-apply-btn" id="action-apply">Apply</button>
+        <button class="action-copy-btn" id="action-copy" title="Copy slot config"><ha-icon icon="mdi:content-copy"></ha-icon></button>
+        <button class="action-paste-btn" id="action-paste" ${_clipboard ? "" : "disabled"} title="${_clipboard ? `Paste &amp; Save (${ACTION_LABELS[_clipboard.action] ?? _clipboard.action})` : "Paste &amp; Save"}"><ha-icon icon="mdi:content-paste"></ha-icon></button>
+      </div>
     </div>`;
   })() : `<div style="padding:0 16px 16px">
     <div class="edit-hint">
@@ -767,7 +787,10 @@ function renderPopup(ctx) {
       if (selAction === "idle") {
         svcPromise = hass.callService("ha_ems", "planning_idle", commonData);
       } else if (selAction === "charge") {
-        const watts = parseFloat(sr.getElementById("param-charge-w")?.value) || kwpW;
+        const watts = (() => {
+          const v = parseFloat(sr.getElementById("param-charge-w")?.value);
+          return isNaN(v) ? kwpW : v;
+        })();
         const untilRaw = sr.getElementById("param-charge-until")?.value;
         const untilPct = untilRaw ? parseFloat(untilRaw) : null;
         svcPromise = hass.callService(
@@ -776,7 +799,10 @@ function renderPopup(ctx) {
           { ...commonData, wattage: watts, ...untilPct != null ? { until_pct: untilPct } : {} }
         );
       } else if (selAction === "discharge") {
-        const watts = parseFloat(sr.getElementById("param-discharge-w")?.value) || kwpW;
+        const watts = (() => {
+          const v = parseFloat(sr.getElementById("param-discharge-w")?.value);
+          return isNaN(v) ? kwpW : v;
+        })();
         const untilRaw = sr.getElementById("param-discharge-until")?.value;
         const untilPct = untilRaw ? parseFloat(untilRaw) : null;
         svcPromise = hass.callService(
@@ -786,7 +812,7 @@ function renderPopup(ctx) {
         );
       } else if (selAction === "use_net") {
         const maxRaw = sr.getElementById("param-usenet-max")?.value;
-        const maxWatts = maxRaw ? parseFloat(maxRaw) : null;
+        const maxWatts = maxRaw !== "" ? parseFloat(maxRaw) : null;
         const useSolar = sr.getElementById("param-usenet-solar")?.classList.contains("on") ?? true;
         svcPromise = hass.callService(
           "ha_ems",
@@ -797,8 +823,14 @@ function renderPopup(ctx) {
         const useSolar = sr.getElementById("param-car-solar")?.classList.contains("on") ?? true;
         const netCardOn = sr.getElementById("wc-car-net")?.classList.contains("on") ?? false;
         const batCardOn = sr.getElementById("wc-car-bat")?.classList.contains("on") ?? false;
-        const netW2 = netCardOn ? parseFloat(sr.getElementById("param-car-net-w")?.value) || 0 : 0;
-        const batW2 = batCardOn ? parseFloat(sr.getElementById("param-car-bat-w")?.value) || 0 : 0;
+        const netW2 = netCardOn ? (() => {
+          const v = parseFloat(sr.getElementById("param-car-net-w")?.value);
+          return isNaN(v) ? 0 : v;
+        })() : 0;
+        const batW2 = batCardOn ? (() => {
+          const v = parseFloat(sr.getElementById("param-car-bat-w")?.value);
+          return isNaN(v) ? 0 : v;
+        })() : 0;
         const batUntilR = sr.getElementById("param-car-bat-until")?.value;
         const batUntil = batCardOn && batUntilR ? parseFloat(batUntilR) : null;
         svcPromise = hass.callService("ha_ems", "planning_car_charge_slot", {
@@ -831,6 +863,122 @@ function renderPopup(ctx) {
         });
       }
     });
+    sr.getElementById("action-copy")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const numVal = (id, fallback) => {
+        const v = parseFloat(sr.getElementById(id)?.value);
+        return isNaN(v) ? fallback : v;
+      };
+      const optNumVal = (id) => {
+        const v = sr.getElementById(id)?.value;
+        return v !== "" ? parseFloat(v) : null;
+      };
+      _clipboard = {
+        action: selAction,
+        locked: sr.getElementById("action-locked")?.checked ?? false,
+        chargeW: numVal("param-charge-w", kwpW),
+        chargeUntilPct: optNumVal("param-charge-until"),
+        dischargeW: numVal("param-discharge-w", kwpW),
+        dischargeUntilPct: optNumVal("param-discharge-until"),
+        netMaxW: optNumVal("param-usenet-max"),
+        netUseSolar: sr.getElementById("param-usenet-solar")?.classList.contains("on") ?? true,
+        carUseSolar: sr.getElementById("param-car-solar")?.classList.contains("on") ?? true,
+        carNetOn: sr.getElementById("wc-car-net")?.classList.contains("on") ?? false,
+        carNetW: numVal("param-car-net-w", kwpW),
+        carBatOn: sr.getElementById("wc-car-bat")?.classList.contains("on") ?? false,
+        carBatW: numVal("param-car-bat-w", kwpW),
+        carBatUntilPct: optNumVal("param-car-bat-until")
+      };
+      const pasteBtn = sr.getElementById("action-paste");
+      if (pasteBtn) {
+        pasteBtn.removeAttribute("disabled");
+        pasteBtn.title = `Paste & Save (${ACTION_LABELS[selAction] ?? selAction})`;
+      }
+      const copyBtn = sr.getElementById("action-copy");
+      if (copyBtn) {
+        copyBtn.classList.add("success");
+        setTimeout(() => copyBtn.classList.remove("success"), 1500);
+      }
+    });
+    sr.getElementById("action-paste")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (!_clipboard) return;
+      const cb = _clipboard;
+      selAction = cb.action;
+      sr.querySelectorAll(".ap-btn[data-action]").forEach(
+        (b) => b.classList.toggle("sel", b.dataset.action === selAction)
+      );
+      showParams(selAction);
+      const setVal = (id, val) => {
+        const el = sr.getElementById(id);
+        if (el) el.value = val != null ? String(val) : "";
+      };
+      const setToggle = (id, on) => {
+        sr.getElementById(id)?.classList.toggle("on", on);
+      };
+      setVal("param-charge-w", cb.chargeW);
+      setVal("param-charge-until", cb.chargeUntilPct);
+      setVal("param-discharge-w", cb.dischargeW);
+      setVal("param-discharge-until", cb.dischargeUntilPct);
+      setVal("param-usenet-max", cb.netMaxW);
+      setToggle("param-usenet-solar", cb.netUseSolar);
+      setToggle("param-car-solar", cb.carUseSolar);
+      setToggle("wc-car-net", cb.carNetOn);
+      setVal("param-car-net-w", cb.carNetW);
+      setToggle("wc-car-bat", cb.carBatOn);
+      setVal("param-car-bat-w", cb.carBatW);
+      setVal("param-car-bat-until", cb.carBatUntilPct);
+      const lockedChk = sr.getElementById("action-locked");
+      if (lockedChk) lockedChk.checked = cb.locked;
+      const slotTime = slot.start ?? slot.time;
+      const commonData = { device_id: deviceId || entryId, time: slotTime, locked: cb.locked };
+      let svcPromise2;
+      if (cb.action === "idle") {
+        svcPromise2 = hass.callService("ha_ems", "planning_idle", commonData);
+      } else if (cb.action === "charge") {
+        svcPromise2 = hass.callService(
+          "ha_ems",
+          "planning_charge",
+          { ...commonData, wattage: cb.chargeW, ...cb.chargeUntilPct != null ? { until_pct: cb.chargeUntilPct } : {} }
+        );
+      } else if (cb.action === "discharge") {
+        svcPromise2 = hass.callService(
+          "ha_ems",
+          "planning_discharge",
+          { ...commonData, wattage: cb.dischargeW, ...cb.dischargeUntilPct != null ? { until_pct: cb.dischargeUntilPct } : {} }
+        );
+      } else if (cb.action === "use_net") {
+        svcPromise2 = hass.callService(
+          "ha_ems",
+          "planning_use_net",
+          { ...commonData, use_solar: cb.netUseSolar, ...cb.netMaxW != null ? { max_wattage: cb.netMaxW } : {} }
+        );
+      } else if (cb.action === "car_charge") {
+        svcPromise2 = hass.callService("ha_ems", "planning_car_charge_slot", {
+          ...commonData,
+          use_solar: cb.carUseSolar,
+          use_net_wattage: cb.carNetOn ? cb.carNetW : 0,
+          use_battery_wattage: cb.carBatOn ? cb.carBatW : 0,
+          ...cb.carBatOn && cb.carBatUntilPct != null ? { use_battery_until_pct: cb.carBatUntilPct } : {}
+        });
+      }
+      const pasteBtn2 = sr.getElementById("action-paste");
+      if (svcPromise2) {
+        svcPromise2.then(() => {
+          if (pasteBtn2) {
+            pasteBtn2.classList.add("success");
+          }
+          setTimeout(() => {
+            if (pasteBtn2) pasteBtn2.classList.remove("success");
+          }, 2e3);
+        }).catch((err) => {
+          if (pasteBtn2) {
+            pasteBtn2.classList.add("error");
+            console.error("EMS card error:", err);
+          }
+        });
+      }
+    });
   }
 }
 
@@ -842,7 +990,7 @@ var EmsDashboardCard = class extends HTMLElement {
     this._slots = [];
     this._filteredSlots = [];
     this._days = [];
-    this._dayIdx = 0;
+    this._dayIdx = -1;
     this._activeIdx = null;
     this._devColors = {};
     this._lastSer = "";
@@ -978,8 +1126,14 @@ var EmsDashboardCard = class extends HTMLElement {
       const target = fixedDay === "tomorrow" ? tomorrow : today;
       const idx = this._days.findIndex((d) => d.date === target);
       this._dayIdx = idx >= 0 ? idx : 0;
-    } else if (this._dayIdx >= this._days.length) {
-      this._dayIdx = 0;
+    } else {
+      const today = localDateStr(/* @__PURE__ */ new Date());
+      const todayIdx = this._days.findIndex((d) => d.date === today);
+      if (this._dayIdx < 0) {
+        this._dayIdx = todayIdx >= 0 ? todayIdx : Math.max(0, this._days.length - 1);
+      } else if (this._dayIdx >= this._days.length) {
+        this._dayIdx = Math.max(0, this._days.length - 1);
+      }
     }
     this._filteredSlots = this._days[this._dayIdx]?.slots ?? this._slots;
     this._buildDevColors();

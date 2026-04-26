@@ -1,6 +1,29 @@
 import { Slot, CardConfig } from '../shared/types';
 import { priceColor, slotAction, slotTimeStr, slotEndTimeStr } from '../shared/utils';
 
+interface SlotClipboard {
+  action: string;
+  locked: boolean;
+  chargeW: number;
+  chargeUntilPct: number | null;
+  dischargeW: number;
+  dischargeUntilPct: number | null;
+  netMaxW: number | null;
+  netUseSolar: boolean;
+  carUseSolar: boolean;
+  carNetOn: boolean;
+  carNetW: number;
+  carBatOn: boolean;
+  carBatW: number;
+  carBatUntilPct: number | null;
+}
+
+let _clipboard: SlotClipboard | null = null;
+
+const ACTION_LABELS: Record<string, string> = {
+  idle: 'Idle', charge: 'Charge', discharge: 'Discharge', use_net: 'Use Net', car_charge: 'Car Charge',
+};
+
 export interface DialogContext {
   sr: ShadowRoot;
   slots: Slot[];
@@ -175,7 +198,11 @@ export function renderPopup(ctx: DialogContext): void {
         <input type="checkbox" id="action-locked" ${slot.locked ? 'checked' : ''}>
         <span class="action-locked-label">Locked (prevent auto-replanning)</span>
       </div>
-      <button class="action-apply-btn" id="action-apply">Apply</button>
+      <div class="action-btn-row">
+        <button class="action-apply-btn" id="action-apply">Apply</button>
+        <button class="action-copy-btn" id="action-copy" title="Copy slot config"><ha-icon icon="mdi:content-copy"></ha-icon></button>
+        <button class="action-paste-btn" id="action-paste" ${_clipboard ? '' : 'disabled'} title="${_clipboard ? `Paste &amp; Save (${ACTION_LABELS[_clipboard.action] ?? _clipboard.action})` : 'Paste &amp; Save'}"><ha-icon icon="mdi:content-paste"></ha-icon></button>
+      </div>
     </div>`;
   })() : `<div style="padding:0 16px 16px">
     <div class="edit-hint">
@@ -333,6 +360,117 @@ export function renderPopup(ctx: DialogContext): void {
           setTimeout(() => { if (applyBtn) { applyBtn.textContent = 'Apply'; applyBtn.classList.remove('success'); } }, 2000);
         }).catch((err: any) => {
           if (applyBtn) { applyBtn.textContent = '✕ Error'; applyBtn.classList.add('error'); console.error('EMS card error:', err); }
+        });
+      }
+    });
+
+    // Copy: snapshot the current form state into the module-level clipboard
+    sr.getElementById('action-copy')?.addEventListener('click', (e: Event) => {
+      e.stopPropagation();
+      const numVal = (id: string, fallback: number) => {
+        const v = parseFloat((sr.getElementById(id) as HTMLInputElement)?.value);
+        return isNaN(v) ? fallback : v;
+      };
+      const optNumVal = (id: string): number | null => {
+        const v = (sr.getElementById(id) as HTMLInputElement)?.value;
+        return v !== '' ? parseFloat(v) : null;
+      };
+      _clipboard = {
+        action:           selAction,
+        locked:           (sr.getElementById('action-locked') as HTMLInputElement)?.checked ?? false,
+        chargeW:          numVal('param-charge-w', kwpW),
+        chargeUntilPct:   optNumVal('param-charge-until'),
+        dischargeW:       numVal('param-discharge-w', kwpW),
+        dischargeUntilPct: optNumVal('param-discharge-until'),
+        netMaxW:          optNumVal('param-usenet-max'),
+        netUseSolar:      sr.getElementById('param-usenet-solar')?.classList.contains('on') ?? true,
+        carUseSolar:      sr.getElementById('param-car-solar')?.classList.contains('on') ?? true,
+        carNetOn:         sr.getElementById('wc-car-net')?.classList.contains('on') ?? false,
+        carNetW:          numVal('param-car-net-w', kwpW),
+        carBatOn:         sr.getElementById('wc-car-bat')?.classList.contains('on') ?? false,
+        carBatW:          numVal('param-car-bat-w', kwpW),
+        carBatUntilPct:   optNumVal('param-car-bat-until'),
+      };
+      // Enable paste button and update its tooltip
+      const pasteBtn = sr.getElementById('action-paste') as HTMLButtonElement | null;
+      if (pasteBtn) {
+        pasteBtn.removeAttribute('disabled');
+        pasteBtn.title = `Paste & Save (${ACTION_LABELS[selAction] ?? selAction})`;
+      }
+      const copyBtn = sr.getElementById('action-copy') as HTMLButtonElement | null;
+      if (copyBtn) {
+        copyBtn.classList.add('success');
+        setTimeout(() => copyBtn.classList.remove('success'), 1500);
+      }
+    });
+
+    // Paste: load clipboard into form and auto-save
+    sr.getElementById('action-paste')?.addEventListener('click', (e: Event) => {
+      e.stopPropagation();
+      if (!_clipboard) return;
+      const cb = _clipboard;
+
+      // Update action selection
+      selAction = cb.action;
+      sr.querySelectorAll('.ap-btn[data-action]').forEach(b =>
+        b.classList.toggle('sel', (b as HTMLElement).dataset.action === selAction)
+      );
+      showParams(selAction);
+
+      // Fill form values
+      const setVal = (id: string, val: number | null | '') => {
+        const el = sr.getElementById(id) as HTMLInputElement | null;
+        if (el) el.value = val != null ? String(val) : '';
+      };
+      const setToggle = (id: string, on: boolean) => {
+        sr.getElementById(id)?.classList.toggle('on', on);
+      };
+      setVal('param-charge-w',        cb.chargeW);
+      setVal('param-charge-until',    cb.chargeUntilPct);
+      setVal('param-discharge-w',     cb.dischargeW);
+      setVal('param-discharge-until', cb.dischargeUntilPct);
+      setVal('param-usenet-max',      cb.netMaxW);
+      setToggle('param-usenet-solar', cb.netUseSolar);
+      setToggle('param-car-solar',    cb.carUseSolar);
+      setToggle('wc-car-net',         cb.carNetOn);
+      setVal('param-car-net-w',       cb.carNetW);
+      setToggle('wc-car-bat',         cb.carBatOn);
+      setVal('param-car-bat-w',       cb.carBatW);
+      setVal('param-car-bat-until',   cb.carBatUntilPct);
+      const lockedChk = sr.getElementById('action-locked') as HTMLInputElement | null;
+      if (lockedChk) lockedChk.checked = cb.locked;
+
+      // Auto-save
+      const slotTime   = slot.start ?? slot.time;
+      const commonData = { device_id: deviceId || entryId, time: slotTime, locked: cb.locked };
+      let svcPromise2: Promise<any> | undefined;
+      if (cb.action === 'idle') {
+        svcPromise2 = hass.callService('ha_ems', 'planning_idle', commonData);
+      } else if (cb.action === 'charge') {
+        svcPromise2 = hass.callService('ha_ems', 'planning_charge',
+          { ...commonData, wattage: cb.chargeW, ...(cb.chargeUntilPct != null ? { until_pct: cb.chargeUntilPct } : {}) });
+      } else if (cb.action === 'discharge') {
+        svcPromise2 = hass.callService('ha_ems', 'planning_discharge',
+          { ...commonData, wattage: cb.dischargeW, ...(cb.dischargeUntilPct != null ? { until_pct: cb.dischargeUntilPct } : {}) });
+      } else if (cb.action === 'use_net') {
+        svcPromise2 = hass.callService('ha_ems', 'planning_use_net',
+          { ...commonData, use_solar: cb.netUseSolar, ...(cb.netMaxW != null ? { max_wattage: cb.netMaxW } : {}) });
+      } else if (cb.action === 'car_charge') {
+        svcPromise2 = hass.callService('ha_ems', 'planning_car_charge_slot', {
+          ...commonData,
+          use_solar:           cb.carUseSolar,
+          use_net_wattage:     cb.carNetOn ? cb.carNetW : 0,
+          use_battery_wattage: cb.carBatOn ? cb.carBatW : 0,
+          ...(cb.carBatOn && cb.carBatUntilPct != null ? { use_battery_until_pct: cb.carBatUntilPct } : {}),
+        });
+      }
+      const pasteBtn2 = sr.getElementById('action-paste') as HTMLButtonElement | null;
+      if (svcPromise2) {
+        svcPromise2.then(() => {
+          if (pasteBtn2) { pasteBtn2.classList.add('success'); }
+          setTimeout(() => { if (pasteBtn2) pasteBtn2.classList.remove('success'); }, 2000);
+        }).catch((err: any) => {
+          if (pasteBtn2) { pasteBtn2.classList.add('error'); console.error('EMS card error:', err); }
         });
       }
     });
