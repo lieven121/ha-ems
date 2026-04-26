@@ -292,20 +292,20 @@ export function renderPopup(ctx: DialogContext): void {
       if (selAction === 'idle') {
         svcPromise = hass.callService('ha_ems', 'planning_idle', commonData);
       } else if (selAction === 'charge') {
-        const watts    = parseFloat((sr.getElementById('param-charge-w') as HTMLInputElement)?.value) || kwpW;
+        const watts    = (() => { const v = parseFloat((sr.getElementById('param-charge-w') as HTMLInputElement)?.value); return isNaN(v) ? kwpW : v; })();
         const untilRaw = (sr.getElementById('param-charge-until') as HTMLInputElement)?.value;
         const untilPct = untilRaw ? parseFloat(untilRaw) : null;
         svcPromise = hass.callService('ha_ems', 'planning_charge',
           { ...commonData, wattage: watts, ...(untilPct != null ? { until_pct: untilPct } : {}) });
       } else if (selAction === 'discharge') {
-        const watts    = parseFloat((sr.getElementById('param-discharge-w') as HTMLInputElement)?.value) || kwpW;
+        const watts    = (() => { const v = parseFloat((sr.getElementById('param-discharge-w') as HTMLInputElement)?.value); return isNaN(v) ? kwpW : v; })();
         const untilRaw = (sr.getElementById('param-discharge-until') as HTMLInputElement)?.value;
         const untilPct = untilRaw ? parseFloat(untilRaw) : null;
         svcPromise = hass.callService('ha_ems', 'planning_discharge',
           { ...commonData, wattage: watts, ...(untilPct != null ? { until_pct: untilPct } : {}) });
       } else if (selAction === 'use_net') {
         const maxRaw   = (sr.getElementById('param-usenet-max') as HTMLInputElement)?.value;
-        const maxWatts = maxRaw ? parseFloat(maxRaw) : null;
+        const maxWatts = maxRaw !== '' ? parseFloat(maxRaw) : null;
         const useSolar = sr.getElementById('param-usenet-solar')?.classList.contains('on') ?? true;
         svcPromise = hass.callService('ha_ems', 'planning_use_net',
           { ...commonData, use_solar: useSolar, ...(maxWatts != null ? { max_wattage: maxWatts } : {}) });
@@ -313,8 +313,8 @@ export function renderPopup(ctx: DialogContext): void {
         const useSolar   = sr.getElementById('param-car-solar')?.classList.contains('on') ?? true;
         const netCardOn  = sr.getElementById('wc-car-net')?.classList.contains('on') ?? false;
         const batCardOn  = sr.getElementById('wc-car-bat')?.classList.contains('on') ?? false;
-        const netW2      = netCardOn ? (parseFloat((sr.getElementById('param-car-net-w') as HTMLInputElement)?.value) || 0) : 0;
-        const batW2      = batCardOn ? (parseFloat((sr.getElementById('param-car-bat-w') as HTMLInputElement)?.value) || 0) : 0;
+        const netW2      = netCardOn ? ((() => { const v = parseFloat((sr.getElementById('param-car-net-w') as HTMLInputElement)?.value); return isNaN(v) ? 0 : v; })()) : 0;
+        const batW2      = batCardOn ? ((() => { const v = parseFloat((sr.getElementById('param-car-bat-w') as HTMLInputElement)?.value); return isNaN(v) ? 0 : v; })()) : 0;
         const batUntilR  = (sr.getElementById('param-car-bat-until') as HTMLInputElement)?.value;
         const batUntil   = (batCardOn && batUntilR) ? parseFloat(batUntilR) : null;
         svcPromise = hass.callService('ha_ems', 'planning_car_charge_slot', {
