@@ -26,7 +26,7 @@ export class EmsDashboardCard extends HTMLElement {
     this._slots         = [];
     this._filteredSlots = [];
     this._days          = [];
-    this._dayIdx        = 0;
+    this._dayIdx        = -1; // -1 = uninitialized; will default to today on first data load
     this._activeIdx     = null;
     this._devColors     = {};
     this._lastSer       = '';
@@ -175,8 +175,15 @@ export class EmsDashboardCard extends HTMLElement {
       const target   = fixedDay === 'tomorrow' ? tomorrow : today;
       const idx      = this._days.findIndex(d => d.date === target);
       this._dayIdx   = idx >= 0 ? idx : 0;
-    } else if (this._dayIdx >= this._days.length) {
-      this._dayIdx = 0;
+    } else {
+      const today    = localDateStr(new Date());
+      const todayIdx = this._days.findIndex(d => d.date === today);
+      if (this._dayIdx < 0) {
+        // First load: default to today, or last available day if today isn't present yet
+        this._dayIdx = todayIdx >= 0 ? todayIdx : Math.max(0, this._days.length - 1);
+      } else if (this._dayIdx >= this._days.length) {
+        this._dayIdx = Math.max(0, this._days.length - 1);
+      }
     }
 
     this._filteredSlots = this._days[this._dayIdx]?.slots ?? this._slots;
