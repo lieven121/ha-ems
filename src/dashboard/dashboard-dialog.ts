@@ -1,5 +1,5 @@
-import { Slot, CardConfig } from '../shared/types';
-import { priceColor, slotAction, slotTimeStr, slotEndTimeStr } from '../shared/utils';
+import { DeviceAvailable, Slot, CardConfig } from '../shared/types';
+import { priceColor, priceScore, priceScoreColor, slotAction, slotTimeStr, slotEndTimeStr } from '../shared/utils';
 
 interface SlotClipboard {
   action: string;
@@ -69,12 +69,16 @@ export function renderPopup(ctx: DialogContext): void {
       <div class="pt-label">${label}</div><div class="pt-time">–</div>\
       <div class="pt-price" style="color:#4a5568">–</div></div>${arrow}`;
     const p = slots[idx].price, c = priceColor(p), w = Math.min(100, Math.max(5, p/52*100));
+    const score = priceScore(p, allPrices);
+    const scoreCol = priceScoreColor(score);
     const injLine = cur && slots[idx]._injPrice ? `<div class="pt-inj">↑ ${slots[idx]._injPrice!.toFixed(2)} <span class="pt-unit">ct</span></div>` : '';
+    const scoreLine = cur ? `<div class="pt-score" style="color:${scoreCol}">Score: ${score}/10</div>` : '';
     return `<div class="pt-slot${cur?' cur':''}${isNav?' nav':''}${isNow?' is-now':''}"${isNav?` data-nav="${idx}"`:''}
       title="${isNav?'Click to navigate':''}">
       <div class="pt-label">${label}</div>
       <div class="pt-time">${slotTimeStr(slots[idx])}</div>
       <div class="pt-price" style="color:${c}">${p.toFixed(2)}<span class="pt-unit">ct</span></div>
+      ${scoreLine}
       ${injLine}
       <div class="pt-bar" style="background:${c};width:${w}%"></div>
     </div>${arrow}`;

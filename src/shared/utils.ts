@@ -1,5 +1,26 @@
 import { Slot, ActionInfo } from './types';
 
+/**
+ * Compute a price score from 1 (expensive) to 10 (cheap) based on
+ * where the price sits in the percentile distribution of all prices.
+ */
+export function priceScore(price: number, allPrices: number[]): number {
+  if (allPrices.length === 0) return 5;
+  const sorted = [...allPrices].sort((a, b) => a - b);
+  // Percentile: how many prices are >= this price (higher = cheaper relative to others)
+  const cheaperCount = sorted.filter(p => p >= price).length;
+  const pct = cheaperCount / sorted.length; // 1.0 = cheapest, 0.0 = most expensive
+  return Math.max(1, Math.min(10, Math.round(pct * 9 + 1)));
+}
+
+export function priceScoreColor(score: number): string {
+  if (score >= 8) return '#22c55e';  // green — great price
+  if (score >= 6) return '#3b82f6';  // blue — good
+  if (score >= 4) return '#f59e0b';  // amber — average
+  if (score >= 2) return '#f97316';  // orange — poor
+  return '#dc2626';                  // red — expensive
+}
+
 export function priceColor(p: number): string {
   const stops = [
     {v:-10,r:59,g:130,b:246},{v:5,r:59,g:130,b:246},

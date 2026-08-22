@@ -30,6 +30,7 @@ header span{font-family:var(--code-font-family, monospace);font-size:10px;color:
 .stat-action{font-family:var(--code-font-family,monospace);font-size:10px;font-weight:600;margin-top:6px;}
 .stat-sep{color:var(--text-dim);margin:0 3px;font-weight:400;}
 .stat-value.compound{font-size:14px;}
+.stat-score{font-family:var(--code-font-family, monospace);font-size:11px;font-weight:600;white-space:nowrap;}
 
 .controls{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center;}
 .btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:6px;cursor:pointer;font-family:var(--code-font-family, monospace);font-size:10px;font-weight:500;letter-spacing:.05em;transition:all .15s;}
@@ -61,9 +62,15 @@ header span{font-family:var(--code-font-family, monospace);font-size:10px;color:
 #tooltip{position:fixed;z-index:8000;background:#0d1017;border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-family:var(--code-font-family,monospace);font-size:10px;color:var(--text-bright);white-space:nowrap;pointer-events:none;box-shadow:0 4px 16px rgba(0,0,0,.6);transition:opacity .1s;opacity:0;}
 #tooltip.visible{opacity:1;}
 .tip-time{color:var(--text-dim);margin-bottom:2px;}
+.tip-score{margin-top:1px;font-weight:600;}
 .tip-act{margin-top:2px;}
 
 .action-strip{display:flex;gap:1px;height:14px;margin-top:3px;}
+/* Device pips: which non-battery devices run in each slot, at a glance. */
+.device-strip{display:flex;gap:1px;height:7px;margin-top:2px;}
+.device-strip[hidden]{display:none;}
+.dc{flex:1;display:flex;flex-direction:column;gap:1px;cursor:pointer;border-radius:2px;overflow:hidden;}
+.dc-pip{flex:1;min-height:2px;}
 .ac{flex:1;border-radius:2px;cursor:pointer;transition:filter .1s;}
 .ac:hover{filter:brightness(1.4);}
 
@@ -136,6 +143,7 @@ header span{font-family:var(--code-font-family, monospace);font-size:10px;color:
 .pt-price{font-family:var(--code-font-family, monospace);font-size:15px;font-weight:700;line-height:1;white-space:nowrap;}
 .pt-unit{font-size:9px;font-weight:400;opacity:.7;margin-left:1px;}
 .pt-inj{font-family:var(--code-font-family,monospace);font-size:10px;color:var(--text-dim);margin-top:2px;}
+.pt-score{font-family:var(--code-font-family,monospace);font-size:10px;font-weight:600;margin-top:2px;}
 .pt-bar{height:3px;border-radius:2px;margin-top:5px;}
 .pt-arrow{color:var(--border);font-size:16px;flex-shrink:0;padding-bottom:6px;}
 

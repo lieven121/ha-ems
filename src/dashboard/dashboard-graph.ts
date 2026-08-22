@@ -53,7 +53,9 @@ export function renderMainChart(
       const slot = slots[i];
       const col  = priceColor(slot.price);
       const act  = slotAction(slot);
-      tooltipEl.innerHTML = `<div class="tip-time">${slotTimeStr(slot)}–${slotEndTimeStr(slots, i)}</div><div style="color:${col};font-weight:700">${slot.price.toFixed(2)} ct${slot._injPrice ? ` <span style="color:var(--text-dim);font-weight:400">↑ ${slot._injPrice.toFixed(2)}</span>` : ''}</div><div class="tip-act" style="color:${act.color}">${act.label}</div>`;
+      const score = priceScore(slot.price, allPrices);
+      const scoreCol = priceScoreColor(score);
+      tooltipEl.innerHTML = `<div class="tip-time">${slotTimeStr(slot)}–${slotEndTimeStr(slots, i)}</div><div style="color:${col};font-weight:700">${slot.price.toFixed(2)} ct${slot._injPrice ? ` <span style="color:var(--text-dim);font-weight:400">↑ ${slot._injPrice.toFixed(2)}</span>` : ''}</div><div class="tip-score" style="color:${scoreCol}">Score: ${score}/10</div><div class="tip-act" style="color:${act.color}">${act.label}</div>`;
       const rect = el.getBoundingClientRect();
       const top  = rect.top - (tooltipEl as HTMLElement).offsetHeight - 8;
       const left = rect.left + rect.width / 2 - (tooltipEl as HTMLElement).offsetWidth / 2;

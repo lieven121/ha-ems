@@ -430,11 +430,14 @@ export class EmsDashboardCard extends HTMLElement {
     {
       const curSlot = ns >= 0 ? slots[ns] : null;
       const hasInj  = !!(this._config.price?.injection_price_key);
+      const curScore = curSlot ? priceScore(curSlot.price, prices) : 0;
+      const curScoreCol = curSlot ? priceScoreColor(curScore) : '';
       const curCard = curSlot
         ? `<div class="stat-card">
             <div class="stat-label">Current</div>
             <div class="stat-price-row">
               <span class="stat-value">${curSlot.price.toFixed(2)}<span class="stat-unit">ct</span></span>
+              <span class="stat-score" style="color:${curScoreCol}">${curScore}/10</span>
               ${hasInj ? `<span class="stat-inj">↑ ${curSlot._injPrice!.toFixed(2)} ct</span>` : ''}
             </div>
             <div class="stat-action" style="color:${slotAction(curSlot).color}">● ${slotAction(curSlot).label}</div>
