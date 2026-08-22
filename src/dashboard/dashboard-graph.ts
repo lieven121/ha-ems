@@ -118,51 +118,111 @@ export function renderMainChart(
   ).join('');
 }
 
+/** Normalise a card colour option to a CSS colour.
+ *
+ *  HA's `color_rgb` selector stores `[r, g, b]`, so reading `.r/.g/.b` yields
+ *  `rgb(undefined,undefined,undefined)` -- an invalid colour that computes to
+ *  `stroke: none`, silently making the overlay unpaintable. Objects and plain
+ *  CSS strings are accepted too, and anything unrecognised falls back.
+ */
+export function rgbToCss(color: any, fallback: string): string {
+  if (Array.isArray(color) && color.length >= 3) {
+    return `rgb(${color[0]},${color[1]},${color[2]})`;
+  }
+  if (color && typeof color === 'object' && color.r != null) {
+    return `rgb(${color.r},${color.g},${color.b})`;
+  }
+  if (typeof color === 'string' && color.trim()) return color;
+  return fallback;
+}
+
+/** Resolve the battery SoC entity: card config first, then whatever the
+ *  integration itself was configured with (exposed on the planning entity).
+ *  Falling back means the overlay works without duplicating the entity id in
+ *  the card config. */
+export function resolveBatteryEntity(config: CardConfig, hass: any, planningEntityId: string | null): string | null {
+  const fromCard = config.integration?.battery_entity;
+  if (fromCard) return fromCard;
+  const planEntity = planningEntityId || config.integration?.planning_entity;
+  const fromIntegration = planEntity ? hass?.states[planEntity]?.attributes?.battery_entity_id : null;
+  return fromIntegration || null;
+}
+
 export function renderBatteryOverlay(
   sr: ShadowRoot,
   slots: Slot[],
   config: CardConfig,
   hass: any,
+  planningEntityId: string | null,
 ): void {
   const n = slots.length;
-  const battSvg = sr.getElementById('battery-svg') as SVGElement | null;
-  const showBattery = config.layout?.show_battery !== false && !!config.integration?.battery_entity;
-  if (battSvg) {
-    if (showBattery && n > 0) {
-      const battEntity = config.integration!.battery_entity!;
-      const battState  = hass?.states[battEntity];
-      const currentPct = battState ? parseFloat(battState.state) : null;
-      const lineColor  = config.integration?.battery_line_color
-        ? `rgb(${config.integration.battery_line_color.r},${config.integration.battery_line_color.g},${config.integration.battery_line_color.b})`
-        : '#06b6d4';
+  const battSvg = sr.getElementById('battery-svg') as unknown as SVGElement | null;
+  const battAxis = sr.getElementById('batt-axis') as HTMLElement | null;
 
+  const battEntity = resolveBatteryEntity(config, hass, planningEntityId);
+  const battState  = battEntity ? hass?.states[battEntity] : null;
+  const rawPct     = battState ? parseFloat(battState.state) : NaN;
+  const currentPct = isNaN(rawPct) ? null : rawPct;
+
+  // The prediction line comes from the backend and needs no card config, so it
+  // is gated only on the data actually being there. The current-SoC line needs
+  // a readable entity.
+  const predPoints = slots
+    .map((s, idx) => s.battery_prediction == null
+      ? null
+      : { x: (idx + 0.5) / n * 100, y: (1 - s.battery_prediction / 100) * CHART_H })
+    .filter(Boolean) as { x: number; y: number }[];
+
+  const enabled     = config.layout?.show_battery !== false && n > 0;
+  const showPred    = enabled && predPoints.length > 1;
+  const showCurrent = enabled && currentPct != null;
+
+  const lineColor = rgbToCss(config.integration?.battery_line_color, '#06b6d4');
+
+  if (battSvg) {
+    if (showPred || showCurrent) {
+      // preserveAspectRatio="none" stretches x by chartWidth/100 while leaving y
+      // at 1x, so only geometry that tolerates that distortion may live in here.
+      // Text belongs in the HTML axis column below.
       battSvg.setAttribute('viewBox', `0 0 100 ${CHART_H}`);
       battSvg.setAttribute('preserveAspectRatio', 'none');
 
-      const slotW = 100 / n;
-      const predPoints = slots.map((s, idx) => {
-        if (s.battery_prediction == null) return null;
-        return { x: (idx + 0.5) * slotW, y: (1 - s.battery_prediction / 100) * CHART_H };
-      }).filter(Boolean) as { x: number; y: number }[];
-
       let svgContent = '';
-
-      if (predPoints.length > 1) {
+      if (showPred) {
         const pathD = predPoints.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x} ${p.y}`).join(' ');
-        svgContent += `<path d="${pathD}" fill="none" stroke="${lineColor}" stroke-width="0.6" stroke-dasharray="1.5 1" opacity="0.75" vector-effect="non-scaling-stroke"/>`;
+        svgContent += `<path d="${pathD}" fill="none" stroke="${lineColor}" stroke-width="2" stroke-dasharray="5 4" opacity="0.95" vector-effect="non-scaling-stroke"/>`;
       }
-
-      if (currentPct != null && !isNaN(currentPct)) {
-        const y = (1 - currentPct / 100) * CHART_H;
-        svgContent += `<line x1="0" y1="${y}" x2="100" y2="${y}" stroke="${lineColor}" stroke-width="0.8" opacity="0.9" vector-effect="non-scaling-stroke"/>`;
-        svgContent += `<text x="99" y="${Math.max(6, y - 1.5)}" text-anchor="end" fill="${lineColor}" font-size="5" font-family="monospace" opacity="0.9" vector-effect="non-scaling-stroke">${currentPct.toFixed(0)}%</text>`;
+      if (showCurrent) {
+        const y = (1 - currentPct! / 100) * CHART_H;
+        svgContent += `<line x1="0" y1="${y}" x2="100" y2="${y}" stroke="${lineColor}" stroke-width="1.5" stroke-dasharray="2 3" opacity="0.7" vector-effect="non-scaling-stroke"/>`;
       }
-
       battSvg.innerHTML = svgContent;
-      (battSvg as any).hidden = false;
+      // Must be the attribute, not the `hidden` property: `hidden` is defined on
+      // HTMLElement, not SVGElement, so assigning it here only sets a JS expando
+      // and leaves the markup's hidden attribute (and display:none) in place.
+      battSvg.removeAttribute('hidden');
     } else {
       battSvg.innerHTML = '';
-      (battSvg as any).hidden = true;
+      battSvg.setAttribute('hidden', '');
+    }
+  }
+
+  // Battery % axis — a fixed column outside the scrolling chart body, so the
+  // readout stays put and is never subject to the SVG's horizontal stretch.
+  if (battAxis) {
+    if (showPred || showCurrent) {
+      let axisHtml = BATT_AXIS_TICKS.map(v =>
+        `<div class="batt-tick" style="bottom:${v / 100 * CHART_H}px;color:${lineColor}">${v}</div>`
+      ).join('');
+      if (showCurrent) {
+        const bottom = Math.max(0, Math.min(CHART_H, currentPct! / 100 * CHART_H));
+        axisHtml += `<div class="batt-now" style="bottom:${bottom}px;color:${lineColor};border-color:${lineColor}">${currentPct!.toFixed(0)}%</div>`;
+      }
+      battAxis.innerHTML = axisHtml;
+      battAxis.removeAttribute('hidden');
+    } else {
+      battAxis.innerHTML = '';
+      battAxis.setAttribute('hidden', '');
     }
   }
 }

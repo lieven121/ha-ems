@@ -43,7 +43,8 @@ export interface CardConfig {
     entry_id?: string;
     planning_entity?: string;
     battery_entity?: string;
-    battery_line_color?: { r: number; g: number; b: number };
+    // HA's color_rgb selector stores [r,g,b]; older configs used {r,g,b}.
+    battery_line_color?: [number, number, number] | { r: number; g: number; b: number } | string;
   };
   layout?: {
     theme?: 'dark' | 'light' | 'system' | 'ha';

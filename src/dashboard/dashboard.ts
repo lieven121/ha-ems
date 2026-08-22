@@ -53,7 +53,11 @@ export class EmsDashboardCard extends HTMLElement {
       this._resolveDeviceEntities(deviceId);
     }
     const slots = this._buildSlots(hass);
-    const ser = JSON.stringify(slots);
+    // The battery SoC entity is not part of `slots`, so fold its state into the
+    // change key — otherwise the overlay never redraws as the battery moves.
+    const battEntity = resolveBatteryEntity(this._config, hass, this._planningEntityId);
+    const battState  = battEntity ? hass?.states[battEntity]?.state : '';
+    const ser = JSON.stringify(slots) + '|' + battState;
     if (ser !== this._lastSer) {
       this._lastSer = ser;
       this._slots   = slots;
@@ -252,10 +256,12 @@ export class EmsDashboardCard extends HTMLElement {
                 <div class="bars" id="bars" style="height:${CHART_H}px"></div>
                 <svg class="battery-svg" id="battery-svg" style="position:absolute;top:0;left:0;width:100%;height:${CHART_H}px;pointer-events:none;overflow:visible;" hidden></svg>
                 <div class="action-strip" id="action-strip"></div>
+                <div class="device-strip" id="device-strip" hidden></div>
                 <div class="x-axis" id="x-axis"></div>
               </div>
             </div>
           </div>
+          <div class="batt-axis" id="batt-axis" style="height:${CHART_H}px" hidden></div>
         </div>
         <div class="brush-wrap" id="brush-wrap">
           <div class="brush-label-row">
@@ -361,6 +367,22 @@ export class EmsDashboardCard extends HTMLElement {
       }
 
       lines.push('');
+      {
+        const battEntity2 = resolveBatteryEntity(this._config, this._hass, this._planningEntityId);
+        const src = this._config.integration?.battery_entity ? 'card config' : battEntity2 ? 'integration' : '(none)';
+        lines.push(`<b>battery entity:</b> ${battEntity2 || 'not resolved'} (from ${src})`);
+        if (battEntity2) {
+          const bs = this._hass?.states[battEntity2];
+          lines.push(`<b>  state:</b> ${bs ? bs.state : '⚠ entity not found in hass.states'}`);
+        }
+        const planState2 = planEntity ? this._hass?.states[planEntity] : null;
+        lines.push(`<b>  battery_size_kwh:</b> ${planState2?.attributes?.battery_size_kwh ?? 'not configured — backend skips SoC simulation'}`);
+        const withPred = slots.filter(sl => sl.battery_prediction != null).length;
+        lines.push(`<b>  slots with battery_prediction:</b> ${withPred} / ${slots.length}`);
+        lines.push(`<b>  show_battery:</b> ${this._config.layout?.show_battery !== false}`);
+      }
+
+      lines.push('');
       lines.push(`<b>parsed slots (this day):</b> ${slots.length}`);
       const actionCounts: Record<string, number> = {};
       for (const s of slots) { const a = (s.action || 'idle'); actionCounts[a] = (actionCounts[a] || 0) + 1; }
@@ -422,8 +444,8 @@ export class EmsDashboardCard extends HTMLElement {
       });
     }
 
-    renderMainChart(sr, slots, this._config, this._hass, ns, (i) => this._openPopup(i));
-    renderBatteryOverlay(sr, slots, this._config, this._hass);
+    renderMainChart(sr, slots, this._config, this._hass, ns, this._devColors, (i) => this._openPopup(i));
+    renderBatteryOverlay(sr, slots, this._config, this._hass, this._planningEntityId);
 
     // Stats
     const avg = prices.reduce((a, b) => a + b, 0) / n;

@@ -44,6 +44,12 @@ header span{font-family:var(--code-font-family, monospace);font-size:10px;color:
 .y-axis{width:30px;flex-shrink:0;padding:16px 4px 0 0;position:relative;background:var(--surface);border-right:1px solid var(--border);}
 .y-label{position:absolute;right:4px;font-family:var(--code-font-family, monospace);font-size:9px;color:var(--text-dim);transform:translateY(-50%);white-space:nowrap;}
 .chart-right{flex:1;display:flex;flex-direction:column;min-width:0;}
+/* Battery % axis: fixed column outside the scrolling chart body. Padding-top
+   matches .chart-wrap so bottom:0 lands exactly on the chart baseline. */
+.batt-axis{width:34px;flex-shrink:0;padding:16px 0 0 4px;position:relative;background:var(--surface);border-left:1px solid var(--border);}
+.batt-axis[hidden]{display:none;}
+.batt-tick{position:absolute;left:4px;font-family:var(--code-font-family, monospace);font-size:8px;opacity:.45;transform:translateY(50%);white-space:nowrap;}
+.batt-now{position:absolute;left:2px;font-family:var(--code-font-family, monospace);font-size:9px;font-weight:700;padding:1px 3px;border:1px solid;border-radius:3px;background:var(--surface);transform:translateY(50%);white-space:nowrap;}
 .chart-wrap{overflow-x:auto;overflow-y:visible;padding:16px 16px 0;flex-shrink:0;}
 .chart-body{min-width:640px;position:relative;display:flex;flex-direction:column;}
 .grid-lines{position:absolute;top:0;left:0;right:0;height:220px;pointer-events:none;z-index:0;}
@@ -236,7 +242,7 @@ header span{font-family:var(--code-font-family, monospace);font-size:10px;color:
 
 .action-strip[hidden]{display:none;}
 .brush-wrap[hidden]{display:none;}
-.battery-svg{position:absolute;top:0;left:0;width:100%;pointer-events:none;overflow:visible;}
+.battery-svg{position:absolute;top:0;left:0;width:100%;pointer-events:none;overflow:visible;z-index:5;}
 .battery-svg[hidden]{display:none;}
 header[hidden]{display:none;}
 #chart-card[hidden]{display:none;}
