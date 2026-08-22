@@ -8,6 +8,7 @@ export function renderMainChart(
   config: CardConfig,
   hass: any,
   nowIdx: number,
+  devColors: Record<string, string>,
   onSlotClick: (i: number) => void,
 ): void {
   const n = slots.length;
@@ -46,6 +47,7 @@ export function renderMainChart(
   }).join('');
 
   const tooltipEl = sr.getElementById('tooltip')!;
+  const allPrices = slots.map(s => s.price);
   sr.getElementById('bars')!.querySelectorAll('.slot').forEach(el => {
     const i = +(el as HTMLElement).dataset.i!;
     el.addEventListener('click', () => onSlotClick(i));
@@ -91,6 +93,23 @@ export function renderMainChart(
   sr.getElementById('action-strip')!.querySelectorAll('.ac').forEach(el => {
     el.addEventListener('click', () => onSlotClick(+(el as HTMLElement).dataset.i!));
   });
+
+  // Device strip — one column per slot, one pip per device scheduled in it
+  const deviceStrip = sr.getElementById('device-strip') as HTMLElement;
+  const anyDevices = slots.some(s => (s.devices || []).length > 0);
+  deviceStrip.hidden = !anyDevices || config.layout?.show_actions === false;
+  if (!deviceStrip.hidden) {
+    deviceStrip.innerHTML = slots.map((slot, i) => {
+      const pips = (slot.devices || []).map(d =>
+        `<div class="dc-pip" style="background:${devColors[d.name] || '#3b82f6'}"></div>`
+      ).join('');
+      const names = (slot.devices || []).map(d => d.name).join(', ');
+      return `<div class="dc" data-i="${i}" title="${names}">${pips}</div>`;
+    }).join('');
+    deviceStrip.querySelectorAll('.dc').forEach(el => {
+      el.addEventListener('click', () => onSlotClick(+(el as HTMLElement).dataset.i!));
+    });
+  }
 
   // X-axis labels
   const every = Math.max(1, Math.floor(n / 12));

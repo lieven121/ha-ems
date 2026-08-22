@@ -121,6 +121,7 @@ export class EmsDashboardCard extends HTMLElement {
           locked:    false,
           action_config: {},
           car:       {},
+          devices:   [],
           battery_prediction: null,
         };
       });
@@ -149,6 +150,7 @@ export class EmsDashboardCard extends HTMLElement {
             locked:             p.locked        ?? slot.locked,
             action_config:      p.action_config ?? slot.action_config,
             car:                p.car           ?? slot.car,
+            devices:            p.devices       ?? slot.devices,
             battery_prediction: p.battery_prediction ?? slot.battery_prediction,
             price:     slot.price || p.price || 0,
             _injPrice: slot._injPrice || p.injection_price || 0,

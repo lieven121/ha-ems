@@ -23,6 +23,12 @@ from .const import (
     ACTION_USE_NET,
     CONF_BATTERY_ENTITY_ID,
     CONF_BATTERY_SIZE_KWH,
+    CONF_DEVICE_CONTROL,
+    CONF_DEVICE_DEFAULT_WATTAGE,
+    CONF_DEVICE_MODES,
+    CONF_DEVICE_NAME,
+    CONF_DEVICE_SWITCH_ENTITY_ID,
+    CONF_DEVICES,
     CONF_INJECTION_PRICE_KEY,
     CONF_PRICE_ATTRIBUTE,
     CONF_PRICE_ENTITY_ID,
@@ -30,7 +36,11 @@ from .const import (
     CONF_ROUNDTRIP_LOSS_PCT,
     CONF_START_KEY,
     DEFAULT_AVG_CONSUMPTION,
+    DEFAULT_DEVICE_WATTAGE,
     DEFAULT_KWP,
+    DEVICE_CONTROL_MODES,
+    DEVICE_CONTROL_WATTAGE,
+    DEVICE_CONTROLS,
     DEFAULT_MAX_BATTERY,
     DEFAULT_MIN_BATTERY,
     DEFAULT_ROUNDTRIP_LOSS_PCT,
@@ -59,7 +69,8 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         self._store: Store = Store(
             hass, STORAGE_VERSION, f"ha_ems_{config_entry.entry_id}"
         )
-        # Planning dict: raw_start_str → {action, locked, action_config}
+        # Planning dict: raw_start_str → {action, locked, action_config, devices}
+        # where devices is {device_name: {"wattage": float}}
         self._planning: dict[str, dict[str, Any]] = {}
 
         # Live-editable values (backed by number/switch entities)
@@ -85,6 +96,118 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
             manufacturer="ha_ems",
             model="Energy Management System",
         )
+
+    # ------------------------------------------------------------------
+    # Schedulable devices
+    # ------------------------------------------------------------------
+
+    @property
+    def configured_devices(self) -> list[dict[str, Any]]:
+        """Return the configured non-battery devices, normalised."""
+        raw = self._cfg().get(CONF_DEVICES) or []
+        devices: list[dict[str, Any]] = []
+        for entry in raw:
+            name = str(entry.get(CONF_DEVICE_NAME, "")).strip()
+            if not name:
+                continue
+            try:
+                wattage = float(entry.get(CONF_DEVICE_DEFAULT_WATTAGE, DEFAULT_DEVICE_WATTAGE))
+            except (TypeError, ValueError):
+                wattage = DEFAULT_DEVICE_WATTAGE
+            control = entry.get(CONF_DEVICE_CONTROL, DEVICE_CONTROL_WATTAGE)
+            if control not in DEVICE_CONTROLS:
+                control = DEVICE_CONTROL_WATTAGE
+            modes = [
+                {"name": str(m.get("name")), "wattage": m.get("wattage")}
+                for m in (entry.get(CONF_DEVICE_MODES) or [])
+                if str(m.get("name") or "").strip()
+            ]
+            devices.append(
+                {
+                    CONF_DEVICE_NAME: name,
+                    CONF_DEVICE_CONTROL: control,
+                    CONF_DEVICE_MODES: modes,
+                    CONF_DEVICE_DEFAULT_WATTAGE: wattage,
+                    CONF_DEVICE_SWITCH_ENTITY_ID: entry.get(CONF_DEVICE_SWITCH_ENTITY_ID),
+                }
+            )
+        return devices
+
+    def _device_config(self, name: str) -> dict[str, Any] | None:
+        for device in self.configured_devices:
+            if device[CONF_DEVICE_NAME] == name:
+                return device
+        return None
+
+    def _effective_device_wattage(
+        self, name: str, scheduled: dict[str, Any]
+    ) -> float:
+        """Load estimate in watts for a device scheduled in one slot.
+
+        Only 'wattage' devices carry a per-slot figure. On/off devices use their
+        configured default, and mode devices use the mode's own wattage when one
+        was given, otherwise the default -- so the battery forecast stays honest
+        even where the user is never asked for a number.
+        """
+        device = self._device_config(name)
+        if device is None:
+            # Device removed from config but still present in stored planning.
+            try:
+                return float(scheduled.get("wattage") or 0)
+            except (TypeError, ValueError):
+                return 0.0
+
+        control = device[CONF_DEVICE_CONTROL]
+        default_w = float(device[CONF_DEVICE_DEFAULT_WATTAGE])
+
+        if control == DEVICE_CONTROL_WATTAGE:
+            raw = scheduled.get("wattage")
+            if raw is None:
+                return default_w
+            try:
+                return float(raw)
+            except (TypeError, ValueError):
+                return default_w
+
+        if control == DEVICE_CONTROL_MODES:
+            mode_name = scheduled.get("mode")
+            for mode in device[CONF_DEVICE_MODES]:
+                if mode["name"] == mode_name and mode.get("wattage") is not None:
+                    return float(mode["wattage"])
+            return default_w
+
+        return default_w
+
+    def device_schedule(self, start_str: str) -> dict[str, dict[str, Any]]:
+        """Return the devices scheduled for the slot starting at *start_str*."""
+        return self._planning.get(start_str, {}).get("devices", {}) or {}
+
+    @staticmethod
+    def _car_battery_budget_w(action_config: dict) -> float:
+        """Battery budget for a car-charge slot, in watts.
+
+        Positive: the car may draw this much from the house battery.
+        Negative: charge the house battery at this rate while the car charges,
+        which is what you want when the cheap hours have to serve both.
+        Zero: grid/solar only, the battery is not involved.
+        """
+        try:
+            return float(action_config.get("use_battery_wattage", 0) or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _slot_device_wattage(self, slot: dict) -> float:
+        """Total draw in watts of every device scheduled in *slot*."""
+        total = 0.0
+        for dev in slot.get("devices") or []:
+            watts = dev.get("manual_override_w")
+            if watts is None:
+                watts = dev.get("allocated_wattage_w")
+            try:
+                total += float(watts or 0)
+            except (TypeError, ValueError):
+                continue
+        return total
 
     # ------------------------------------------------------------------
     # Persistence
@@ -252,6 +375,20 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
             slot["action"] = override.get("action", ACTION_IDLE)
             slot["locked"] = override.get("locked", False)
             slot["action_config"] = dict(override.get("action_config", {}))
+            slot["devices"] = [
+                {
+                    "name": dev_name,
+                    "control": (self._device_config(dev_name) or {}).get(
+                        CONF_DEVICE_CONTROL, DEVICE_CONTROL_WATTAGE
+                    ),
+                    "mode": dev_cfg.get("mode"),
+                    "manual_override_w": dev_cfg.get("wattage"),
+                    "allocated_wattage_w": self._effective_device_wattage(
+                        dev_name, dev_cfg
+                    ),
+                }
+                for dev_name, dev_cfg in (override.get("devices") or {}).items()
+            ]
             slot["battery_prediction"] = None
             slots.append(slot)
 
@@ -414,13 +551,62 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         locked: bool,
         action_config: dict[str, Any],
     ) -> None:
-        """Set or update a single slot override."""
+        """Set or update a single slot override.
+
+        Device scheduling lives alongside the battery action in the same slot,
+        so it is carried over rather than overwritten.
+        """
         key = self._find_slot_start_str(time_str)
+        existing = self._planning.get(key, {})
         self._planning[key] = {
             "action": action,
             "locked": locked,
             "action_config": action_config,
+            "devices": dict(existing.get("devices") or {}),
         }
+        await self._async_save_planning()
+        await self.async_refresh()
+
+    async def async_set_device_slot(
+        self,
+        time_str: str,
+        device_name: str,
+        wattage: float | None = None,
+        mode: str | None = None,
+    ) -> None:
+        """Schedule *device_name* in a single slot, leaving its battery action alone.
+
+        On/off devices need neither argument; mode devices pass *mode*; only
+        'wattage' devices carry a per-slot power figure.
+        """
+        key = self._find_slot_start_str(time_str)
+        existing = self._planning.get(key, {})
+        devices = dict(existing.get("devices") or {})
+        scheduled: dict[str, Any] = {}
+        if wattage is not None:
+            scheduled["wattage"] = wattage
+        if mode is not None:
+            scheduled["mode"] = mode
+        devices[device_name] = scheduled
+        self._planning[key] = {
+            "action": existing.get("action", ACTION_IDLE),
+            "locked": existing.get("locked", False),
+            "action_config": dict(existing.get("action_config") or {}),
+            "devices": devices,
+        }
+        await self._async_save_planning()
+        await self.async_refresh()
+
+    async def async_clear_device_slot(self, time_str: str, device_name: str) -> None:
+        """Unschedule *device_name* from a single slot."""
+        key = self._find_slot_start_str(time_str)
+        existing = self._planning.get(key)
+        if not existing:
+            return
+        devices = dict(existing.get("devices") or {})
+        if devices.pop(device_name, None) is None:
+            return
+        existing["devices"] = devices
         await self._async_save_planning()
         await self.async_refresh()
 
@@ -452,6 +638,7 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                     "action": existing.get("action", ACTION_IDLE),
                     "locked": lock,
                     "action_config": existing.get("action_config", {}),
+                    "devices": dict(existing.get("devices") or {}),
                 }
 
         await self._async_save_planning()
@@ -518,6 +705,7 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 "action": ACTION_CAR_CHARGE,
                 "locked": existing.get("locked", False),
                 "action_config": action_config,
+                "devices": dict(existing.get("devices") or {}),
             }
 
         await self._async_save_planning()

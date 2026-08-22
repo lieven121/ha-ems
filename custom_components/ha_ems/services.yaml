@@ -339,3 +339,67 @@ planning_optimize:
         device:
           integration: ha_ems
 
+
+planning_device_slot:
+  name: "Planning - Schedule Device"
+  description: "Schedule a configured device (heat pump, boiler, aircon, ...) in a single slot. The slot's battery action is left untouched."
+  fields:
+    device_id:
+      name: "EMS Device"
+      description: "The EMS device to target."
+      required: true
+      selector:
+        device:
+          integration: ha_ems
+    time:
+      name: "Slot Time"
+      description: "Start time of the slot, as an ISO datetime string."
+      required: true
+      selector:
+        text:
+    device_name:
+      name: "Device Name"
+      description: "Name of the device as configured on the EMS integration."
+      required: true
+      selector:
+        text:
+    wattage:
+      name: "Wattage"
+      description: "Power the device draws while it runs, in watts. Only for devices configured with the 'wattage' control; omit for on/off and mode devices."
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 100000
+          step: 100
+          unit_of_measurement: W
+    mode:
+      name: "Mode"
+      description: "Mode to run the device in. Only for devices configured with the 'modes' control."
+      required: false
+      selector:
+        text:
+
+planning_device_clear:
+  name: "Planning - Unschedule Device"
+  description: "Remove a device from a single slot. The slot's battery action is left untouched."
+  fields:
+    device_id:
+      name: "EMS Device"
+      description: "The EMS device to target."
+      required: true
+      selector:
+        device:
+          integration: ha_ems
+    time:
+      name: "Slot Time"
+      description: "Start time of the slot, as an ISO datetime string."
+      required: true
+      selector:
+        text:
+    device_name:
+      name: "Device Name"
+      description: "Name of the device as configured on the EMS integration."
+      required: true
+      selector:
+        text:

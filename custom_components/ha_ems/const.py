@@ -3,7 +3,7 @@
 DOMAIN = "ha_ems"
 
 # Platforms
-PLATFORMS = ["sensor", "number", "switch", "button"]
+PLATFORMS = ["sensor", "binary_sensor", "number", "switch", "button"]
 
 # ---------------------------------------------------------------------------
 # Config keys
@@ -18,6 +18,25 @@ CONF_BATTERY_ENTITY_ID = "battery_entity_id"
 CONF_BATTERY_SIZE_KWH = "battery_size_kwh"
 CONF_ROUNDTRIP_LOSS_PCT = "roundtrip_loss_pct"
 
+# Schedulable non-battery devices (heat pump, boiler, aircon, ...).
+# Stored on the config entry as a list of
+# {"name": str, "default_wattage": float, "switch_entity_id": str | None}
+CONF_DEVICES = "devices"
+CONF_DEVICE_NAME = "name"
+CONF_DEVICE_DEFAULT_WATTAGE = "default_wattage"
+CONF_DEVICE_SWITCH_ENTITY_ID = "switch_entity_id"
+CONF_DEVICE_CONTROL = "control"
+CONF_DEVICE_MODES = "modes"
+
+# How a device is scheduled per slot.
+#   wattage - a per-slot power figure (dishwasher, car charger, ...)
+#   switch  - plain on/off; the configured default wattage is the load estimate
+#   modes   - pick one of several named modes; no per-slot power entry
+DEVICE_CONTROL_WATTAGE = "wattage"
+DEVICE_CONTROL_SWITCH = "switch"
+DEVICE_CONTROL_MODES = "modes"
+DEVICE_CONTROLS = [DEVICE_CONTROL_WATTAGE, DEVICE_CONTROL_SWITCH, DEVICE_CONTROL_MODES]
+
 # ---------------------------------------------------------------------------
 # Defaults
 # ---------------------------------------------------------------------------
@@ -30,6 +49,7 @@ DEFAULT_MIN_BATTERY = 10.0
 DEFAULT_MAX_BATTERY = 95.0
 DEFAULT_AVG_CONSUMPTION = 300.0
 DEFAULT_KWP = 3000.0  # watts — default max charge power from solar/inverter
+DEFAULT_DEVICE_WATTAGE = 2000.0  # watts — default draw for a scheduled device
 
 # ---------------------------------------------------------------------------
 # Action strings
@@ -60,6 +80,7 @@ ENTITY_KWP = "ems_kwp"
 ENTITY_PLANNING = "ems_planning"
 ENTITY_CURRENT_ACTION = "ems_current_action"
 ENTITY_OPTIMIZE = "ems_optimize"
+ENTITY_DEVICE_PREFIX = "ems_device"
 
 # ---------------------------------------------------------------------------
 # Service names
@@ -73,6 +94,8 @@ SERVICE_PLANNING_CAR_CHARGE_SLOT = "planning_car_charge_slot"
 SERVICE_PLANNING_LOCK = "planning_lock"
 SERVICE_PLANNING_CLEAR = "planning_clear"
 SERVICE_PLANNING_OPTIMIZE = "planning_optimize"
+SERVICE_PLANNING_DEVICE_SLOT = "planning_device_slot"
+SERVICE_PLANNING_DEVICE_CLEAR = "planning_device_clear"
 
 # ---------------------------------------------------------------------------
 # Service field names
@@ -96,6 +119,8 @@ FIELD_CLEAR_LOCKED = "clear_locked"
 FIELD_USE_NET_WATTAGE = "use_net_wattage"
 FIELD_USE_BATTERY_WATTAGE = "use_battery_wattage"
 FIELD_USE_BATTERY_UNTIL_PCT = "use_battery_until_pct"
+FIELD_DEVICE_NAME = "device_name"
+FIELD_MODE = "mode"
 
 # ---------------------------------------------------------------------------
 # Event name

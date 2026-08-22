@@ -4,6 +4,16 @@ export interface ActionInfo {
   color: string;
 }
 
+/** How a device is scheduled per slot, mirroring the integration's config. */
+export type DeviceControl = 'wattage' | 'switch' | 'modes';
+
+export interface DeviceAvailable {
+  name: string;
+  control?: DeviceControl;
+  modes?: string[];
+  default_wattage: number;
+}
+
 export interface Slot {
   start?: string;
   time?: string;
@@ -15,7 +25,7 @@ export interface Slot {
   car?: Record<string, any>;
   battery_prediction?: number | null;
   battery_manual_override_w?: number;
-  devices?: Array<{ name: string; manual_override_w?: number; allocated_wattage_w?: number }>;
+  devices?: Array<{ name: string; control?: DeviceControl; mode?: string | null; manual_override_w?: number | null; allocated_wattage_w?: number | null }>;
 }
 
 export interface CardConfig {

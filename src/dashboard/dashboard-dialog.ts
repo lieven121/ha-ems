@@ -49,6 +49,11 @@ export function renderPopup(ctx: DialogContext): void {
   const entryId  = config.integration?.entry_id;
   const deviceId = config.integration?.device_id;
 
+  // Schedulable devices come from the planning entity resolved by the card.
+  const planEntity = ctx.planningEntityId || config.integration?.planning_entity;
+  const devicesAvailable: DeviceAvailable[] =
+    (planEntity ? hass?.states[planEntity]?.attributes?.devices_available : null) ?? [];
+
   // Mini nav bar HTML
   const navSegs = slots.map((s, si) =>
     `<div class="pop-nav-seg" data-i="${si}" style="background:${priceColor(s.price)};cursor:pointer"></div>`
@@ -60,6 +65,7 @@ export function renderPopup(ctx: DialogContext): void {
   }).join('');
 
   // Price trio
+  const allPrices = slots.map(s => s.price);
   const trio = [{label:'Prev',idx:i-1},{label:'Now',idx:i,cur:true},{label:'Next',idx:i+1}] as any[];
   const trioHtml = trio.map(({label, idx, cur}: any, ti: number) => {
     const arrow = ti < 2 ? `<div class="pt-arrow">›</div>` : '';
@@ -174,7 +180,7 @@ export function renderPopup(ctx: DialogContext): void {
               <div class="watt-card-input-wrap">
                 <div class="watt-card-row">
                   <span class="watt-card-sub-label">Wattage</span>
-                  <input class="param-input" id="param-car-net-w" type="number" min="0" max="100000" step="100" value="${carNetW}">
+                  <input class="param-input" id="param-car-net-w" type="number" min="-100000" max="100000" step="100" value="${carNetW}">
                   <span class="param-unit">W</span>
                 </div>
               </div>
@@ -513,6 +519,66 @@ export function renderPopup(ctx: DialogContext): void {
           if (pasteBtn2) { pasteBtn2.classList.add('error'); console.error('EMS card error:', err); }
         });
       }
+    });
+
+    // Device toggle cards — scheduling
+    const devSlotTime = slot.start ?? slot.time;
+
+    /** Per-slot payload for a device, shaped by how that device is controlled. */
+    const deviceParams = (di: number): Record<string, any> => {
+      const d = devicesAvailable[di];
+      if (d.control === 'modes') {
+        const sel = sr.querySelector(`[data-dev-sched-mode="${di}"]`) as HTMLSelectElement | null;
+        const mode = sel?.value ?? (d.modes || [])[0];
+        return mode ? { mode } : {};
+      }
+      if (d.control === 'switch') return {};
+      const inp = sr.querySelector(`[data-dev-sched-input="${di}"]`) as HTMLInputElement | null;
+      const watt = inp ? parseFloat(inp.value) : NaN;
+      return { wattage: isNaN(watt) ? d.default_wattage : watt };
+    };
+
+    const scheduleDevice = (di: number, on: boolean): Promise<any> =>
+      hass.callService(
+        'ha_ems',
+        on ? 'planning_device_slot' : 'planning_device_clear',
+        {
+          device_id: deviceId || entryId,
+          time: devSlotTime,
+          device_name: devicesAvailable[di].name,
+          ...(on ? deviceParams(di) : {}),
+        },
+      );
+
+    sr.querySelectorAll('.dev-toggle-card[data-dev-sched]').forEach(card => {
+      card.addEventListener('click', (e: Event) => {
+        const tag = (e.target as HTMLElement).tagName;
+        if (tag === 'INPUT' || tag === 'SELECT' || tag === 'OPTION') return;
+        e.stopPropagation();
+        card.classList.toggle('on');
+        const isOn = card.classList.contains('on');
+        const di = parseInt((card as HTMLElement).dataset.devSched!);
+        if (!devicesAvailable[di]) return;
+        scheduleDevice(di, isOn).catch((err: any) => {
+          // Put the card back in sync with the backend if the call failed.
+          card.classList.toggle('on', !isOn);
+          console.error('Device schedule error:', err);
+        });
+      });
+    });
+
+    // Editing a wattage or picking a mode schedules the device too, so you do
+    // not have to toggle the card first.
+    sr.querySelectorAll('[data-dev-sched-input], [data-dev-sched-mode]').forEach(el => {
+      el.addEventListener('click', (e: Event) => e.stopPropagation());
+      el.addEventListener('change', (e: Event) => {
+        e.stopPropagation();
+        const ds = (el as HTMLElement).dataset;
+        const di = parseInt((ds.devSchedInput ?? ds.devSchedMode)!);
+        if (!devicesAvailable[di]) return;
+        sr.querySelector(`[data-dev-sched="${di}"]`)?.classList.add('on');
+        scheduleDevice(di, true).catch((err: any) => console.error('Device schedule error:', err));
+      });
     });
   }
 }

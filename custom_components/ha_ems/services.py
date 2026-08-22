@@ -21,11 +21,13 @@ from .const import (
     FIELD_CAR_USE_SOLAR,
     FIELD_CLEAR_LOCKED,
     FIELD_DEVICE_ID,
+    FIELD_DEVICE_NAME,
     FIELD_END,
     FIELD_LOCK,
     FIELD_LOCKED,
     FIELD_MAX_PRICE,
     FIELD_MAX_WATTAGE,
+    FIELD_MODE,
     FIELD_SLOTS_WANTED,
     FIELD_START,
     FIELD_START_TIME,
@@ -41,6 +43,8 @@ from .const import (
     SERVICE_PLANNING_CHARGE,
     SERVICE_PLANNING_CHARGE_CAR,
     SERVICE_PLANNING_CLEAR,
+    SERVICE_PLANNING_DEVICE_CLEAR,
+    SERVICE_PLANNING_DEVICE_SLOT,
     SERVICE_PLANNING_DISCHARGE,
     SERVICE_PLANNING_IDLE,
     SERVICE_PLANNING_LOCK,
@@ -121,6 +125,24 @@ _SERVICE_SCHEMAS: dict[str, vol.Schema] = {
     SERVICE_PLANNING_OPTIMIZE: vol.Schema(
         {
             vol.Required(FIELD_DEVICE_ID): cv.string,
+        }
+    ),
+    SERVICE_PLANNING_DEVICE_SLOT: vol.Schema(
+        {
+            vol.Required(FIELD_DEVICE_ID): cv.string,
+            vol.Required(FIELD_TIME): cv.string,
+            vol.Required(FIELD_DEVICE_NAME): cv.string,
+            # Only 'wattage' devices send a power figure; 'modes' devices send a
+            # mode; plain on/off devices send neither.
+            vol.Optional(FIELD_WATTAGE): vol.Coerce(float),
+            vol.Optional(FIELD_MODE): cv.string,
+        }
+    ),
+    SERVICE_PLANNING_DEVICE_CLEAR: vol.Schema(
+        {
+            vol.Required(FIELD_DEVICE_ID): cv.string,
+            vol.Required(FIELD_TIME): cv.string,
+            vol.Required(FIELD_DEVICE_NAME): cv.string,
         }
     ),
 }
@@ -266,6 +288,26 @@ async def async_register_services(hass: HomeAssistant) -> None:
             return
         await coord.async_optimize()
 
+    async def handle_planning_device_slot(call: ServiceCall) -> None:
+        coord = _get_coordinator_by_device(hass, call.data[FIELD_DEVICE_ID])
+        if coord is None:
+            return
+        await coord.async_set_device_slot(
+            time_str=call.data[FIELD_TIME],
+            device_name=call.data[FIELD_DEVICE_NAME],
+            wattage=call.data.get(FIELD_WATTAGE),
+            mode=call.data.get(FIELD_MODE),
+        )
+
+    async def handle_planning_device_clear(call: ServiceCall) -> None:
+        coord = _get_coordinator_by_device(hass, call.data[FIELD_DEVICE_ID])
+        if coord is None:
+            return
+        await coord.async_clear_device_slot(
+            time_str=call.data[FIELD_TIME],
+            device_name=call.data[FIELD_DEVICE_NAME],
+        )
+
     _handlers = {
         SERVICE_PLANNING_IDLE: handle_planning_idle,
         SERVICE_PLANNING_CHARGE: handle_planning_charge,
@@ -276,6 +318,8 @@ async def async_register_services(hass: HomeAssistant) -> None:
         SERVICE_PLANNING_LOCK: handle_planning_lock,
         SERVICE_PLANNING_CLEAR: handle_planning_clear,
         SERVICE_PLANNING_OPTIMIZE: handle_planning_optimize,
+        SERVICE_PLANNING_DEVICE_SLOT: handle_planning_device_slot,
+        SERVICE_PLANNING_DEVICE_CLEAR: handle_planning_device_clear,
     }
 
     for name, handler in _handlers.items():

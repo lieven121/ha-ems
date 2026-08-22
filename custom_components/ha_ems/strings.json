@@ -32,10 +32,47 @@
           "battery_size_kwh": "Usable capacity of the battery in kWh.",
           "roundtrip_loss_pct": "Energy lost in a full charge-discharge cycle (default: 20 %)."
         }
+      },
+      "devices": {
+        "title": "Schedulable Devices",
+        "description": "Devices the EMS can schedule alongside the battery (heat pump, boiler, aircon, ...). Each one gets a binary sensor that turns on while it is scheduled; drive the real appliance from an automation on that entity.\n\nConfigured: {devices}",
+        "menu_options": {
+          "device_add": "Add a device",
+          "device_remove": "Remove a device",
+          "finish": "Done"
+        }
+      },
+      "device_add": {
+        "title": "Add Device",
+        "description": "Describe a device the EMS should be able to schedule.",
+        "data": {
+          "name": "Device Name",
+          "control": "How is it scheduled?",
+          "modes": "Modes",
+          "default_wattage": "Typical Power (W)",
+          "switch_entity_id": "Switch Entity (optional)"
+        },
+        "data_description": {
+          "name": "Shown in the dashboard card and used as the service call's device_name.",
+          "control": "Wattage: you set the power per slot. On/off: no power entry at all. Modes: pick one of several named modes per slot.",
+          "modes": "Only for the 'Modes' control. Type each mode and press enter, e.g. Eco, Comfort, Boost. Add a power figure with a colon (Comfort:1500) to make the battery forecast mode-aware.",
+          "default_wattage": "Typical draw while running. Used as the load estimate in the battery forecast for on/off and mode devices, and as the pre-filled value for wattage devices. Set 0 if the draw is negligible.",
+          "switch_entity_id": "The entity that actually turns the device on. Exposed as an attribute so one templated automation can drive every device."
+        }
+      },
+      "device_remove": {
+        "title": "Remove Devices",
+        "description": "Select the devices to remove. Their scheduled slots stay in storage but are no longer applied.",
+        "data": {
+          "devices": "Devices"
+        }
       }
     },
     "error": {
-      "invalid_entity": "The selected entity does not exist in Home Assistant."
+      "invalid_entity": "The selected entity does not exist in Home Assistant.",
+      "invalid_device_name": "Enter a name for the device.",
+      "duplicate_device": "A device with that name already exists.",
+      "modes_required": "Add at least one mode, or pick a different control type."
     }
   },
   "options": {
@@ -59,13 +96,50 @@
           "battery_size_kwh": "Battery Capacity (kWh, optional)",
           "roundtrip_loss_pct": "Round-trip Loss (%)"
         }
+      },
+      "devices": {
+        "title": "Schedulable Devices",
+        "description": "Devices the EMS can schedule alongside the battery (heat pump, boiler, aircon, ...). Each one gets a binary sensor that turns on while it is scheduled; drive the real appliance from an automation on that entity.\n\nConfigured: {devices}",
+        "menu_options": {
+          "device_add": "Add a device",
+          "device_remove": "Remove a device",
+          "finish": "Done"
+        }
+      },
+      "device_add": {
+        "title": "Add Device",
+        "description": "Describe a device the EMS should be able to schedule.",
+        "data": {
+          "name": "Device Name",
+          "control": "How is it scheduled?",
+          "modes": "Modes",
+          "default_wattage": "Typical Power (W)",
+          "switch_entity_id": "Switch Entity (optional)"
+        },
+        "data_description": {
+          "name": "Shown in the dashboard card and used as the service call's device_name.",
+          "control": "Wattage: you set the power per slot. On/off: no power entry at all. Modes: pick one of several named modes per slot.",
+          "modes": "Only for the 'Modes' control. Type each mode and press enter, e.g. Eco, Comfort, Boost. Add a power figure with a colon (Comfort:1500) to make the battery forecast mode-aware.",
+          "default_wattage": "Typical draw while running. Used as the load estimate in the battery forecast for on/off and mode devices, and as the pre-filled value for wattage devices. Set 0 if the draw is negligible.",
+          "switch_entity_id": "The entity that actually turns the device on. Exposed as an attribute so one templated automation can drive every device."
+        }
+      },
+      "device_remove": {
+        "title": "Remove Devices",
+        "description": "Select the devices to remove. Their scheduled slots stay in storage but are no longer applied.",
+        "data": {
+          "devices": "Devices"
+        }
       }
     },
     "abort": {
       "changes_saved": "Configuration updated successfully."
     },
     "error": {
-      "invalid_entity": "The selected entity does not exist in Home Assistant."
+      "invalid_entity": "The selected entity does not exist in Home Assistant.",
+      "invalid_device_name": "Enter a name for the device.",
+      "duplicate_device": "A device with that name already exists.",
+      "modes_required": "Add at least one mode, or pick a different control type."
     }
   },
   "entity": {
@@ -91,6 +165,15 @@
       },
       "ems_current_action": {
         "name": "EMS Current Action"
+      }
+    }
+  },
+  "selector": {
+    "device_control": {
+      "options": {
+        "wattage": "Wattage — set the power per slot",
+        "switch": "On/off — no power entry",
+        "modes": "Modes — pick a named mode per slot"
       }
     }
   }

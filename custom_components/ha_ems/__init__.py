@@ -66,8 +66,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Refresh coordinator when config entry is updated externally."""
-    coordinator: EMSCoordinator | None = hass.data.get(DOMAIN, {}).get(entry.entry_id)
-    if coordinator is not None:
-        coordinator.config_entry = entry
-        await coordinator.async_refresh()
+    """Reload when the config entry is updated.
+
+    A refresh is not enough: adding or removing a schedulable device changes
+    which binary_sensor entities should exist, and only a reload re-runs the
+    platform setup.
+    """
+    await hass.config_entries.async_reload(entry.entry_id)

@@ -10,7 +10,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import ACTION_LABELS, DOMAIN, ENTITY_CURRENT_ACTION, ENTITY_PLANNING
+from .const import (
+    ACTION_LABELS,
+    CONF_BATTERY_ENTITY_ID,
+    CONF_BATTERY_SIZE_KWH,
+    DOMAIN,
+    ENTITY_CURRENT_ACTION,
+    ENTITY_PLANNING,
+)
 from .coordinator import EMSCoordinator
 
 
@@ -51,7 +58,23 @@ class EMSPlanningSensor(CoordinatorEntity[EMSCoordinator], SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        return {"planning": self.coordinator.data or []}
+        cfg = self.coordinator.config_entry.data
+        return {
+            "planning": self.coordinator.data or [],
+            # Surfaced so the Lovelace card can draw the battery overlay without
+            # the entity id having to be configured a second time on the card.
+            "battery_entity_id": cfg.get(CONF_BATTERY_ENTITY_ID),
+            "battery_size_kwh": cfg.get(CONF_BATTERY_SIZE_KWH),
+            "devices_available": [
+                {
+                    "name": d["name"],
+                    "control": d["control"],
+                    "modes": [m["name"] for m in d["modes"]],
+                    "default_wattage": d["default_wattage"],
+                }
+                for d in self.coordinator.configured_devices
+            ],
+        }
 
 
 class EMSCurrentActionSensor(CoordinatorEntity[EMSCoordinator], SensorEntity):
@@ -93,6 +116,7 @@ class EMSCurrentActionSensor(CoordinatorEntity[EMSCoordinator], SensorEntity):
             "locked": slot.get("locked", False),
             "action_config": action_config,
             "car": car,
+            "devices": slot.get("devices") or [],
         }
         # Also flatten action_config into top-level for easy automation use
         attrs.update(action_config)
