@@ -1,9 +1,10 @@
 import { CSS } from '../shared/styles';
 import { CHART_H, DEVICE_PALETTE } from '../shared/constants';
 import { Slot, CardConfig } from '../shared/types';
-import { localDateStr, slotAction, slotTimeStr, priceColor } from '../shared/utils';
-import { renderMainChart, renderBatteryOverlay, renderBrush, scrollToSlot } from './dashboard-graph';
+import { localDateStr, slotAction, slotTimeStr, priceColor, priceScore, priceScoreColor } from '../shared/utils';
+import { renderMainChart, renderBatteryOverlay, renderBrush, resolveBatteryEntity, scrollToSlot } from './dashboard-graph';
 import { DialogContext, renderPopup } from './dashboard-dialog';
+import { renderBulkEdit } from './dashboard-bulk-edit';
 
 export class EmsDashboardCard extends HTMLElement {
   private _slots: Slot[];
@@ -550,9 +551,34 @@ export class EmsDashboardCard extends HTMLElement {
       config: this._config,
       hass: this._hass,
       kwpEntityId: this._kwpEntityId,
+      planningEntityId: this._planningEntityId,
       devColors: this._devColors,
       onClose: () => this._closePopup(),
       onNavigate: (j) => this._navigateSlot(j),
+      onBulkEdit: () => this._openBulkEdit(i),
+    });
+  }
+
+  _openBulkEdit(fromIdx: number) {
+    // The overlay is already open (bulk edit is reached from the slot dialog);
+    // this only swaps the popup content in place.
+    this._activeIdx = fromIdx;
+    this.shadowRoot!.getElementById('tooltip')!.classList.remove('visible');
+    renderBulkEdit({
+      sr: this.shadowRoot!,
+      slots: this._filteredSlots,
+      config: this._config,
+      hass: this._hass,
+      kwpEntityId: this._kwpEntityId,
+      planningEntityId: this._planningEntityId,
+      devColors: this._devColors,
+      onClose: () => this._closePopup(),
+      onBack: () => this._renderPopup(fromIdx),
+      onApplied: () => {
+        // Force re-render by clearing serialization cache
+        this._lastSer = '';
+        this.hass = this._hass;
+      },
     });
   }
 

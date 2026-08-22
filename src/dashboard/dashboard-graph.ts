@@ -1,6 +1,6 @@
 import { Slot, CardConfig } from '../shared/types';
-import { CHART_H, Y_STEPS } from '../shared/constants';
-import { priceColor, slotAction, slotHasCar, slotTimeStr, slotEndTimeStr } from '../shared/utils';
+import { BATT_AXIS_TICKS, CHART_H, Y_STEPS } from '../shared/constants';
+import { priceColor, priceScore, priceScoreColor, slotAction, slotHasCar, slotTimeStr, slotEndTimeStr } from '../shared/utils';
 
 export function renderMainChart(
   sr: ShadowRoot,

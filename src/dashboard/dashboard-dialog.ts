@@ -32,9 +32,11 @@ export interface DialogContext {
   config: CardConfig;
   hass: any;
   kwpEntityId: string | null;
+  planningEntityId: string | null;
   devColors: Record<string, string>;
   onClose: () => void;
   onNavigate: (i: number) => void;
+  onBulkEdit: () => void;
 }
 
 export function renderPopup(ctx: DialogContext): void {
@@ -222,7 +224,10 @@ export function renderPopup(ctx: DialogContext): void {
         </div>
         <button class="ph-nav-btn" id="pop-next" ${i===n-1?'disabled':''}>›</button>
       </div>
-      <button class="ph-close" id="pop-close">✕</button>
+      <div class="ph-actions">
+        ${(deviceId || entryId) ? `<button class="ph-bulk-btn" id="pop-bulk" title="Bulk edit slots">⊞</button>` : ''}
+        <button class="ph-close" id="pop-close">✕</button>
+      </div>
     </div>
 
     <div class="pop-nav-wrap">
@@ -253,10 +258,41 @@ export function renderPopup(ctx: DialogContext): void {
       ${ /* solar_wh_predicted — will be added in future */ '' }
     </div>
 
-    ${config.layout?.show_actions !== false ? editHtml : ''}`;
+    ${config.layout?.show_actions !== false ? editHtml : ''}
+    ${(deviceId || entryId) && devicesAvailable.length > 0 ? (() => {
+      const slotDevices = slot.devices || [];
+      const devToggles = devicesAvailable.map((d, di) => {
+        const existing = slotDevices.find(sd => sd.name === d.name);
+        const isOn = !!existing;
+        // Only wattage devices get a number field. On/off devices get no input
+        // at all, mode devices get a mode picker.
+        let control = '';
+        if (d.control === 'modes') {
+          const modes = d.modes || [];
+          const sel = existing?.mode ?? modes[0];
+          control = `<select class="dev-toggle-select" data-dev-sched-mode="${di}">
+            ${modes.map(m => `<option value="${m}"${m === sel ? ' selected' : ''}>${m}</option>`).join('')}
+          </select>`;
+        } else if (d.control !== 'switch') {
+          const watt = existing?.manual_override_w ?? existing?.allocated_wattage_w ?? d.default_wattage;
+          control = `<input class="dev-toggle-input" data-dev-sched-input="${di}" type="number" min="0" max="100000" step="100" value="${watt}">
+            <span class="dev-toggle-unit">W</span>`;
+        }
+        return `<div class="dev-toggle-card${isOn ? ' on' : ''}" data-dev-sched="${di}">
+          <div class="dev-toggle-dot" style="background:${devColors[d.name] || '#3b82f6'}"></div>
+          <span class="dev-toggle-name">${d.name}</span>
+          ${control}
+        </div>`;
+      }).join('');
+      return `<div class="dev-toggle-section">
+        <div class="dev-toggle-title">Schedule Devices</div>
+        <div class="dev-toggle-list">${devToggles}</div>
+      </div>`;
+    })() : ''}`;
 
   // Wire up popup events
   sr.getElementById('pop-close')!.addEventListener('click', () => ctx.onClose());
+  sr.getElementById('pop-bulk')?.addEventListener('click', (e: Event) => { e.stopPropagation(); ctx.onBulkEdit(); });
   sr.getElementById('pop-prev')!.addEventListener('click', (e: Event) => { e.stopPropagation(); ctx.onNavigate(i-1); });
   sr.getElementById('pop-next')!.addEventListener('click', (e: Event) => { e.stopPropagation(); ctx.onNavigate(i+1); });
 
