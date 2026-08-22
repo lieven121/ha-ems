@@ -31,6 +31,7 @@ header span{font-family:var(--code-font-family, monospace);font-size:10px;color:
 .stat-action{font-family:var(--code-font-family,monospace);font-size:10px;font-weight:600;margin-top:6px;}
 .stat-sep{color:var(--text-dim);margin:0 3px;font-weight:400;}
 .stat-value.compound{font-size:14px;}
+.stat-score{font-family:var(--code-font-family, monospace);font-size:11px;font-weight:600;white-space:nowrap;}
 
 .controls{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center;}
 .btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:6px;cursor:pointer;font-family:var(--code-font-family, monospace);font-size:10px;font-weight:500;letter-spacing:.05em;transition:all .15s;}
@@ -44,6 +45,12 @@ header span{font-family:var(--code-font-family, monospace);font-size:10px;color:
 .y-axis{width:30px;flex-shrink:0;padding:16px 4px 0 0;position:relative;background:var(--surface);border-right:1px solid var(--border);}
 .y-label{position:absolute;right:4px;font-family:var(--code-font-family, monospace);font-size:9px;color:var(--text-dim);transform:translateY(-50%);white-space:nowrap;}
 .chart-right{flex:1;display:flex;flex-direction:column;min-width:0;}
+/* Battery % axis: fixed column outside the scrolling chart body. Padding-top
+   matches .chart-wrap so bottom:0 lands exactly on the chart baseline. */
+.batt-axis{width:34px;flex-shrink:0;padding:16px 0 0 4px;position:relative;background:var(--surface);border-left:1px solid var(--border);}
+.batt-axis[hidden]{display:none;}
+.batt-tick{position:absolute;left:4px;font-family:var(--code-font-family, monospace);font-size:8px;opacity:.45;transform:translateY(50%);white-space:nowrap;}
+.batt-now{position:absolute;left:2px;font-family:var(--code-font-family, monospace);font-size:9px;font-weight:700;padding:1px 3px;border:1px solid;border-radius:3px;background:var(--surface);transform:translateY(50%);white-space:nowrap;}
 .chart-wrap{overflow-x:auto;overflow-y:visible;padding:16px 16px 0;flex-shrink:0;}
 .chart-body{min-width:640px;position:relative;display:flex;flex-direction:column;}
 .grid-lines{position:absolute;top:0;left:0;right:0;height:220px;pointer-events:none;z-index:0;}
@@ -62,9 +69,15 @@ header span{font-family:var(--code-font-family, monospace);font-size:10px;color:
 #tooltip{position:fixed;z-index:8000;background:#0d1017;border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-family:var(--code-font-family,monospace);font-size:10px;color:var(--text-bright);white-space:nowrap;pointer-events:none;box-shadow:0 4px 16px rgba(0,0,0,.6);transition:opacity .1s;opacity:0;}
 #tooltip.visible{opacity:1;}
 .tip-time{color:var(--text-dim);margin-bottom:2px;}
+.tip-score{margin-top:1px;font-weight:600;}
 .tip-act{margin-top:2px;}
 
 .action-strip{display:flex;gap:1px;height:14px;margin-top:3px;}
+/* Device pips: which non-battery devices run in each slot, at a glance. */
+.device-strip{display:flex;gap:1px;height:7px;margin-top:2px;}
+.device-strip[hidden]{display:none;}
+.dc{flex:1;display:flex;flex-direction:column;gap:1px;cursor:pointer;border-radius:2px;overflow:hidden;}
+.dc-pip{flex:1;min-height:2px;}
 .ac{flex:1;border-radius:2px;cursor:pointer;transition:filter .1s;}
 .ac:hover{filter:brightness(1.4);}
 
@@ -110,6 +123,9 @@ header span{font-family:var(--code-font-family, monospace);font-size:10px;color:
 .ph-time{font-family:var(--code-font-family, monospace);font-size:17px;font-weight:700;color:var(--text-bright);}
 .ph-close{background:none;border:1px solid var(--border);color:var(--text-dim);width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;transition:all .12s;flex-shrink:0;}
 .ph-close:hover{border-color:var(--text-bright);color:var(--text-bright);}
+.ph-actions{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+.ph-bulk-btn{background:none;border:1px solid var(--border);color:var(--text-dim);width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .12s;flex-shrink:0;}
+.ph-bulk-btn:hover{border-color:var(--accent);color:var(--accent);}
 
 /* Popup mini nav bar */
 .pop-nav-wrap{padding:10px 16px 12px;border-bottom:1px solid var(--border);}
@@ -134,6 +150,7 @@ header span{font-family:var(--code-font-family, monospace);font-size:10px;color:
 .pt-price{font-family:var(--code-font-family, monospace);font-size:15px;font-weight:700;line-height:1;white-space:nowrap;}
 .pt-unit{font-size:9px;font-weight:400;opacity:.7;margin-left:1px;}
 .pt-inj{font-family:var(--code-font-family,monospace);font-size:10px;color:var(--text-dim);margin-top:2px;}
+.pt-score{font-family:var(--code-font-family,monospace);font-size:10px;font-weight:600;margin-top:2px;}
 .pt-bar{height:3px;border-radius:2px;margin-top:5px;}
 .pt-arrow{color:var(--border);font-size:16px;flex-shrink:0;padding-bottom:6px;}
 
@@ -207,6 +224,7 @@ header span{font-family:var(--code-font-family, monospace);font-size:10px;color:
 .watt-card.on .watt-card-input-wrap{display:flex;}
 .watt-card-row{display:flex;align-items:center;gap:7px;}
 .watt-card-sub-label{font-family:var(--code-font-family,monospace);font-size:9px;color:var(--text-dim);white-space:nowrap;min-width:50px;}
+.watt-card-hint{font-family:var(--code-font-family,monospace);font-size:8px;color:var(--text-dim);opacity:.75;line-height:1.4;}
 .car-sep{width:1px;background:var(--border);flex-shrink:0;margin:0 4px;}
 .action-locked-row{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);}
 .action-locked-label{font-family:var(--code-font-family,monospace);font-size:9px;color:var(--text-dim);}
@@ -225,13 +243,96 @@ header span{font-family:var(--code-font-family, monospace);font-size:10px;color:
 
 .action-strip[hidden]{display:none;}
 .brush-wrap[hidden]{display:none;}
-.battery-svg{position:absolute;top:0;left:0;width:100%;pointer-events:none;overflow:visible;}
+.battery-svg{position:absolute;top:0;left:0;width:100%;pointer-events:none;overflow:visible;z-index:5;}
 .battery-svg[hidden]{display:none;}
 header[hidden]{display:none;}
 #chart-card[hidden]{display:none;}
 #stats[hidden]{display:none;}
 #day-btns[hidden]{display:none;}
 .legend-wrap[hidden]{display:none;}
+
+/* \u2500\u2500 Bulk Edit Modal \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+
+.be-header{padding:14px 16px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
+.be-title{font-family:var(--code-font-family, monospace);font-size:12px;font-weight:600;color:var(--text-bright);text-transform:uppercase;letter-spacing:.08em;}
+.be-back{background:none;border:1px solid var(--border);color:var(--text-dim);width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;transition:all .12s;flex-shrink:0;font-family:var(--code-font-family, monospace);}
+.be-back:hover{border-color:var(--text-bright);color:var(--text-bright);}
+.be-header-left{display:flex;align-items:center;gap:10px;}
+.be-close{background:none;border:1px solid var(--border);color:var(--text-dim);width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;transition:all .12s;flex-shrink:0;}
+.be-close:hover{border-color:var(--text-bright);color:var(--text-bright);}
+
+/* Range mini chart */
+.be-range-section{padding:12px 16px;border-bottom:1px solid var(--border);}
+.be-section-label{font-family:var(--code-font-family, monospace);font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;}
+.be-mini-chart{position:relative;height:50px;border-radius:6px;overflow:hidden;cursor:crosshair;user-select:none;background:var(--surface2);touch-action:none;}
+.be-mini-bars{display:flex;align-items:flex-end;height:100%;gap:0;}
+.be-mini-bar{flex:1;min-width:0;transition:opacity .08s;}
+.be-mini-bar.dimmed{opacity:.3;}
+.be-range-highlight{position:absolute;top:0;bottom:0;background:rgba(59,130,246,.2);border-left:2px solid var(--accent);border-right:2px solid var(--accent);pointer-events:none;transition:left .05s,width .05s;}
+.be-threshold-line{position:absolute;left:0;right:0;height:2px;background:var(--now);cursor:ns-resize;pointer-events:auto;z-index:5;}
+.be-threshold-line::after{content:'';position:absolute;left:0;right:0;top:-4px;bottom:-4px;}
+.be-threshold-label{position:absolute;right:4px;top:-14px;font-family:var(--code-font-family, monospace);font-size:8px;color:var(--now);white-space:nowrap;}
+
+/* From/To inputs */
+.be-time-row{display:flex;gap:10px;margin-top:8px;align-items:center;}
+.be-time-field{display:flex;align-items:center;gap:5px;}
+.be-time-label{font-family:var(--code-font-family,monospace);font-size:9px;color:var(--text-dim);min-width:30px;}
+.be-time-input{background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text-bright);font-family:var(--code-font-family,monospace);font-size:11px;padding:5px 8px;width:70px;text-align:center;transition:border-color .12s;}
+.be-time-input:focus{outline:none;border-color:var(--accent);}
+
+/* Price filter */
+.be-filter-section{padding:12px 16px;border-bottom:1px solid var(--border);}
+.be-filter-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+.be-filter-btn{padding:5px 10px;border-radius:5px;border:1px solid var(--border);background:var(--surface2);color:var(--text-dim);cursor:pointer;font-family:var(--code-font-family,monospace);font-size:10px;transition:all .12s;}
+.be-filter-btn:hover{border-color:var(--accent);}
+.be-filter-btn.sel{border-color:var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--surface));}
+.be-filter-input{background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text-bright);font-family:var(--code-font-family,monospace);font-size:11px;padding:5px 8px;width:60px;text-align:center;}
+.be-filter-input:focus{outline:none;border-color:var(--accent);}
+.be-filter-unit{font-family:var(--code-font-family,monospace);font-size:9px;color:var(--text-dim);}
+
+/* Preview bar */
+.be-preview-section{padding:10px 16px;border-bottom:1px solid var(--border);}
+.be-preview-info{font-family:var(--code-font-family,monospace);font-size:10px;color:var(--text-dim);margin-bottom:6px;}
+.be-preview-info b{color:var(--text-bright);}
+.be-preview-strip{display:flex;height:14px;border-radius:4px;overflow:hidden;gap:0;}
+.be-preview-seg{flex:1;min-width:0;transition:opacity .08s;}
+.be-preview-seg.matched{opacity:1;}
+.be-preview-seg.unmatched{opacity:.2;}
+
+/* Action section inside bulk edit */
+.be-action-section{padding:12px 16px;max-height:300px;overflow-y:auto;}
+
+/* Device toggles (shared between single-slot and bulk edit) */
+.dev-toggle-section{padding:10px 16px;border-top:1px solid var(--border);}
+.dev-toggle-title{font-family:var(--code-font-family,monospace);font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;}
+.dev-toggle-list{display:flex;flex-direction:column;gap:5px;}
+.dev-toggle-card{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);cursor:pointer;transition:all .12s;}
+.dev-toggle-card:hover{border-color:var(--accent);}
+.dev-toggle-card.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--surface));}
+.dev-toggle-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;opacity:.4;transition:opacity .12s;}
+.dev-toggle-card.on .dev-toggle-dot{opacity:1;}
+.dev-toggle-name{font-family:var(--code-font-family,monospace);font-size:11px;color:var(--text);flex:1;}
+.dev-toggle-card.on .dev-toggle-name{color:var(--text-bright);}
+.dev-toggle-input{background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text-bright);font-family:var(--code-font-family,monospace);font-size:10px;padding:4px 6px;width:60px;text-align:center;transition:border-color .12s;}
+.dev-toggle-input:focus{outline:none;border-color:var(--accent);}
+.dev-toggle-unit{font-family:var(--code-font-family,monospace);font-size:9px;color:var(--text-dim);}
+.dev-toggle-select{background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text-bright);font-family:var(--code-font-family,monospace);font-size:10px;padding:4px 6px;cursor:pointer;transition:border-color .12s;}
+.dev-toggle-select:focus{outline:none;border-color:var(--accent);}
+.dev-toggle-hint{font-family:var(--code-font-family,monospace);font-size:9px;color:var(--text-dim);opacity:.7;margin-bottom:6px;}
+.dev-toggle-card.off{border-color:#dc2626;background:color-mix(in srgb,#dc2626 10%,var(--surface));}
+.dev-toggle-card.off .dev-toggle-dot{opacity:1;background:#dc2626 !important;}
+.dev-toggle-state{font-family:var(--code-font-family,monospace);font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;}
+.dev-toggle-card.on .dev-toggle-state{color:var(--accent);}
+.dev-toggle-card.off .dev-toggle-state{color:#dc2626;}
+.be-range-count{font-family:var(--code-font-family,monospace);font-size:9px;color:var(--text-dim);}
+
+/* Apply row in bulk edit */
+.be-apply-row{padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;}
+.be-apply-btn{flex:1;padding:10px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-family:var(--code-font-family,monospace);font-size:12px;font-weight:600;cursor:pointer;transition:background .12s;}
+.be-apply-btn:hover{background:#2563eb;}
+.be-apply-btn.success{background:#16a34a;}
+.be-apply-btn.error{background:#dc2626;}
+.be-apply-btn:disabled{opacity:.5;cursor:default;}
 
 /* Light theme */
 .root.theme-light {
@@ -266,6 +367,7 @@ header[hidden]{display:none;}
 // src/shared/constants.ts
 var CHART_H = 220;
 var Y_STEPS = [0, 10, 20, 30, 40, 50];
+var BATT_AXIS_TICKS = [0, 25, 50, 75, 100];
 var DEVICE_PALETTE = [
   "#3b82f6",
   "#8b5cf6",
@@ -278,6 +380,20 @@ var DEVICE_PALETTE = [
 ];
 
 // src/shared/utils.ts
+function priceScore(price, allPrices) {
+  if (allPrices.length === 0) return 5;
+  const sorted = [...allPrices].sort((a, b) => a - b);
+  const cheaperCount = sorted.filter((p) => p >= price).length;
+  const pct = cheaperCount / sorted.length;
+  return Math.max(1, Math.min(10, Math.round(pct * 9 + 1)));
+}
+function priceScoreColor(score) {
+  if (score >= 8) return "#22c55e";
+  if (score >= 6) return "#3b82f6";
+  if (score >= 4) return "#f59e0b";
+  if (score >= 2) return "#f97316";
+  return "#dc2626";
+}
 function priceColor(p) {
   const stops = [
     { v: -10, r: 59, g: 130, b: 246 },
@@ -337,7 +453,7 @@ function slotEndTimeStr(slots, idx) {
 }
 
 // src/dashboard/dashboard-graph.ts
-function renderMainChart(sr, slots, config, hass, nowIdx, onSlotClick) {
+function renderMainChart(sr, slots, config, hass, nowIdx, devColors, onSlotClick) {
   const n = slots.length;
   const prices = slots.map((s) => s.price);
   const maxP = Math.max(...prices, 45);
@@ -367,6 +483,7 @@ function renderMainChart(sr, slots, config, hass, nowIdx, onSlotClick) {
     </div>`;
   }).join("");
   const tooltipEl = sr.getElementById("tooltip");
+  const allPrices = slots.map((s) => s.price);
   sr.getElementById("bars").querySelectorAll(".slot").forEach((el) => {
     const i = +el.dataset.i;
     el.addEventListener("click", () => onSlotClick(i));
@@ -374,7 +491,9 @@ function renderMainChart(sr, slots, config, hass, nowIdx, onSlotClick) {
       const slot = slots[i];
       const col = priceColor(slot.price);
       const act = slotAction(slot);
-      tooltipEl.innerHTML = `<div class="tip-time">${slotTimeStr(slot)}\u2013${slotEndTimeStr(slots, i)}</div><div style="color:${col};font-weight:700">${slot.price.toFixed(2)} ct${slot._injPrice ? ` <span style="color:var(--text-dim);font-weight:400">\u2191 ${slot._injPrice.toFixed(2)}</span>` : ""}</div><div class="tip-act" style="color:${act.color}">${act.label}</div>`;
+      const score = priceScore(slot.price, allPrices);
+      const scoreCol = priceScoreColor(score);
+      tooltipEl.innerHTML = `<div class="tip-time">${slotTimeStr(slot)}\u2013${slotEndTimeStr(slots, i)}</div><div style="color:${col};font-weight:700">${slot.price.toFixed(2)} ct${slot._injPrice ? ` <span style="color:var(--text-dim);font-weight:400">\u2191 ${slot._injPrice.toFixed(2)}</span>` : ""}</div><div class="tip-score" style="color:${scoreCol}">Score: ${score}/10</div><div class="tip-act" style="color:${act.color}">${act.label}</div>`;
       const rect = el.getBoundingClientRect();
       const top = rect.top - tooltipEl.offsetHeight - 8;
       const left = rect.left + rect.width / 2 - tooltipEl.offsetWidth / 2;
@@ -408,43 +527,90 @@ function renderMainChart(sr, slots, config, hass, nowIdx, onSlotClick) {
   sr.getElementById("action-strip").querySelectorAll(".ac").forEach((el) => {
     el.addEventListener("click", () => onSlotClick(+el.dataset.i));
   });
+  const deviceStrip = sr.getElementById("device-strip");
+  const anyDevices = slots.some((s) => (s.devices || []).length > 0);
+  deviceStrip.hidden = !anyDevices || config.layout?.show_actions === false;
+  if (!deviceStrip.hidden) {
+    deviceStrip.innerHTML = slots.map((slot, i) => {
+      const pips = (slot.devices || []).map(
+        (d) => `<div class="dc-pip" style="background:${devColors[d.name] || "#3b82f6"}"></div>`
+      ).join("");
+      const names = (slot.devices || []).map((d) => d.name).join(", ");
+      return `<div class="dc" data-i="${i}" title="${names}">${pips}</div>`;
+    }).join("");
+    deviceStrip.querySelectorAll(".dc").forEach((el) => {
+      el.addEventListener("click", () => onSlotClick(+el.dataset.i));
+    });
+  }
   const every = Math.max(1, Math.floor(n / 12));
   sr.getElementById("x-axis").innerHTML = slots.map(
     (slot, i) => `<div class="x-lbl">${i % every === 0 ? slotTimeStr(slot) : ""}</div>`
   ).join("");
 }
-function renderBatteryOverlay(sr, slots, config, hass) {
+function rgbToCss(color, fallback) {
+  if (Array.isArray(color) && color.length >= 3) {
+    return `rgb(${color[0]},${color[1]},${color[2]})`;
+  }
+  if (color && typeof color === "object" && color.r != null) {
+    return `rgb(${color.r},${color.g},${color.b})`;
+  }
+  if (typeof color === "string" && color.trim()) return color;
+  return fallback;
+}
+function resolveBatteryEntity(config, hass, planningEntityId) {
+  const fromCard = config.integration?.battery_entity;
+  if (fromCard) return fromCard;
+  const planEntity = planningEntityId || config.integration?.planning_entity;
+  const fromIntegration = planEntity ? hass?.states[planEntity]?.attributes?.battery_entity_id : null;
+  return fromIntegration || null;
+}
+function renderBatteryOverlay(sr, slots, config, hass, planningEntityId) {
   const n = slots.length;
   const battSvg = sr.getElementById("battery-svg");
-  const showBattery = config.layout?.show_battery !== false && !!config.integration?.battery_entity;
+  const battAxis = sr.getElementById("batt-axis");
+  const battEntity = resolveBatteryEntity(config, hass, planningEntityId);
+  const battState = battEntity ? hass?.states[battEntity] : null;
+  const rawPct = battState ? parseFloat(battState.state) : NaN;
+  const currentPct = isNaN(rawPct) ? null : rawPct;
+  const predPoints = slots.map((s, idx) => s.battery_prediction == null ? null : { x: (idx + 0.5) / n * 100, y: (1 - s.battery_prediction / 100) * CHART_H }).filter(Boolean);
+  const enabled = config.layout?.show_battery !== false && n > 0;
+  const showPred = enabled && predPoints.length > 1;
+  const showCurrent = enabled && currentPct != null;
+  const lineColor = rgbToCss(config.integration?.battery_line_color, "#06b6d4");
   if (battSvg) {
-    if (showBattery && n > 0) {
-      const battEntity = config.integration.battery_entity;
-      const battState = hass?.states[battEntity];
-      const currentPct = battState ? parseFloat(battState.state) : null;
-      const lineColor = config.integration?.battery_line_color ? `rgb(${config.integration.battery_line_color.r},${config.integration.battery_line_color.g},${config.integration.battery_line_color.b})` : "#06b6d4";
+    if (showPred || showCurrent) {
       battSvg.setAttribute("viewBox", `0 0 100 ${CHART_H}`);
       battSvg.setAttribute("preserveAspectRatio", "none");
-      const slotW = 100 / n;
-      const predPoints = slots.map((s, idx) => {
-        if (s.battery_prediction == null) return null;
-        return { x: (idx + 0.5) * slotW, y: (1 - s.battery_prediction / 100) * CHART_H };
-      }).filter(Boolean);
       let svgContent = "";
-      if (predPoints.length > 1) {
+      if (showPred) {
         const pathD = predPoints.map((p, i) => `${i === 0 ? "M" : "L"}${p.x} ${p.y}`).join(" ");
-        svgContent += `<path d="${pathD}" fill="none" stroke="${lineColor}" stroke-width="0.6" stroke-dasharray="1.5 1" opacity="0.75" vector-effect="non-scaling-stroke"/>`;
+        svgContent += `<path d="${pathD}" fill="none" stroke="${lineColor}" stroke-width="2" stroke-dasharray="5 4" opacity="0.95" vector-effect="non-scaling-stroke"/>`;
       }
-      if (currentPct != null && !isNaN(currentPct)) {
+      if (showCurrent) {
         const y = (1 - currentPct / 100) * CHART_H;
-        svgContent += `<line x1="0" y1="${y}" x2="100" y2="${y}" stroke="${lineColor}" stroke-width="0.8" opacity="0.9" vector-effect="non-scaling-stroke"/>`;
-        svgContent += `<text x="99" y="${Math.max(6, y - 1.5)}" text-anchor="end" fill="${lineColor}" font-size="5" font-family="monospace" opacity="0.9" vector-effect="non-scaling-stroke">${currentPct.toFixed(0)}%</text>`;
+        svgContent += `<line x1="0" y1="${y}" x2="100" y2="${y}" stroke="${lineColor}" stroke-width="1.5" stroke-dasharray="2 3" opacity="0.7" vector-effect="non-scaling-stroke"/>`;
       }
       battSvg.innerHTML = svgContent;
-      battSvg.hidden = false;
+      battSvg.removeAttribute("hidden");
     } else {
       battSvg.innerHTML = "";
-      battSvg.hidden = true;
+      battSvg.setAttribute("hidden", "");
+    }
+  }
+  if (battAxis) {
+    if (showPred || showCurrent) {
+      let axisHtml = BATT_AXIS_TICKS.map(
+        (v) => `<div class="batt-tick" style="bottom:${v / 100 * CHART_H}px;color:${lineColor}">${v}</div>`
+      ).join("");
+      if (showCurrent) {
+        const bottom = Math.max(0, Math.min(CHART_H, currentPct / 100 * CHART_H));
+        axisHtml += `<div class="batt-now" style="bottom:${bottom}px;color:${lineColor};border-color:${lineColor}">${currentPct.toFixed(0)}%</div>`;
+      }
+      battAxis.innerHTML = axisHtml;
+      battAxis.removeAttribute("hidden");
+    } else {
+      battAxis.innerHTML = "";
+      battAxis.setAttribute("hidden", "");
     }
   }
 }
@@ -526,6 +692,8 @@ function renderPopup(ctx) {
   const act = slotAction(slot);
   const entryId = config.integration?.entry_id;
   const deviceId = config.integration?.device_id;
+  const planEntity = ctx.planningEntityId || config.integration?.planning_entity;
+  const devicesAvailable = (planEntity ? hass?.states[planEntity]?.attributes?.devices_available : null) ?? [];
   const navSegs = slots.map(
     (s, si) => `<div class="pop-nav-seg" data-i="${si}" style="background:${priceColor(s.price)};cursor:pointer"></div>`
   ).join("");
@@ -534,6 +702,7 @@ function renderPopup(ctx) {
     if (a.key === "idle") return "";
     return `<div class="pop-nav-dot" style="left:${(si + 0.5) / n * 100}%;background:${a.color}"></div>`;
   }).join("");
+  const allPrices = slots.map((s) => s.price);
   const trio = [{ label: "Prev", idx: i - 1 }, { label: "Now", idx: i, cur: true }, { label: "Next", idx: i + 1 }];
   const trioHtml = trio.map(({ label, idx, cur }, ti) => {
     const arrow = ti < 2 ? `<div class="pt-arrow">\u203A</div>` : "";
@@ -541,12 +710,16 @@ function renderPopup(ctx) {
     const isNow = idx === ns;
     if (idx < 0 || idx >= n) return `<div class="pt-slot${cur ? " cur" : ""}${isNow ? " is-now" : ""}">      <div class="pt-label">${label}</div><div class="pt-time">\u2013</div>      <div class="pt-price" style="color:#4a5568">\u2013</div></div>${arrow}`;
     const p = slots[idx].price, c = priceColor(p), w = Math.min(100, Math.max(5, p / 52 * 100));
+    const score = priceScore(p, allPrices);
+    const scoreCol = priceScoreColor(score);
     const injLine = cur && slots[idx]._injPrice ? `<div class="pt-inj">\u2191 ${slots[idx]._injPrice.toFixed(2)} <span class="pt-unit">ct</span></div>` : "";
+    const scoreLine = cur ? `<div class="pt-score" style="color:${scoreCol}">Score: ${score}/10</div>` : "";
     return `<div class="pt-slot${cur ? " cur" : ""}${isNav ? " nav" : ""}${isNow ? " is-now" : ""}"${isNav ? ` data-nav="${idx}"` : ""}
       title="${isNav ? "Click to navigate" : ""}">
       <div class="pt-label">${label}</div>
       <div class="pt-time">${slotTimeStr(slots[idx])}</div>
       <div class="pt-price" style="color:${c}">${p.toFixed(2)}<span class="pt-unit">ct</span></div>
+      ${scoreLine}
       ${injLine}
       <div class="pt-bar" style="background:${c};width:${w}%"></div>
     </div>${arrow}`;
@@ -578,9 +751,9 @@ function renderPopup(ctx) {
     const netW = curAction === "use_net" ? aCfg.max_wattage ?? kwpW : kwpW;
     const solarOnUseNet = curAction === "use_net" ? aCfg.use_solar !== false : true;
     const solarOnCar = curAction === "car_charge" ? aCfg.use_solar !== false : true;
-    const carNetOn = curAction === "car_charge" && (aCfg.use_net_wattage ?? 0) > 0;
+    const carNetOn = curAction === "car_charge" && (aCfg.use_net_wattage ?? 0) !== 0;
     const carNetW = curAction === "car_charge" ? aCfg.use_net_wattage ?? kwpW : kwpW;
-    const carBatOn = curAction === "car_charge" && (aCfg.use_battery_wattage ?? 0) > 0;
+    const carBatOn = curAction === "car_charge" && (aCfg.use_battery_wattage ?? 0) !== 0;
     const carBatW = curAction === "car_charge" ? aCfg.use_battery_wattage ?? kwpW : kwpW;
     const carBatUntil = curAction === "car_charge" ? aCfg.use_battery_until_pct ?? "" : "";
     return `<div class="action-section" id="action-section">
@@ -634,7 +807,7 @@ function renderPopup(ctx) {
               <div class="watt-card-input-wrap">
                 <div class="watt-card-row">
                   <span class="watt-card-sub-label">Wattage</span>
-                  <input class="param-input" id="param-car-net-w" type="number" min="0" max="100000" step="100" value="${carNetW}">
+                  <input class="param-input" id="param-car-net-w" type="number" min="-100000" max="100000" step="100" value="${carNetW}">
                   <span class="param-unit">W</span>
                 </div>
               </div>
@@ -646,10 +819,11 @@ function renderPopup(ctx) {
               </div>
               <div class="watt-card-input-wrap">
                 <div class="watt-card-row">
-                  <span class="watt-card-sub-label">Wattage</span>
-                  <input class="param-input" id="param-car-bat-w" type="number" min="0" max="100000" step="100" value="${carBatW}">
+                  <span class="watt-card-sub-label">Budget</span>
+                  <input class="param-input" id="param-car-bat-w" type="number" min="-100000" max="100000" step="100" value="${carBatW}">
                   <span class="param-unit">W</span>
                 </div>
+                <div class="watt-card-hint">+ car draws from the battery &nbsp;\xB7&nbsp; \u2212 charges the battery too</div>
                 <div class="watt-card-row">
                   <span class="watt-card-sub-label">Until %<span class="param-optional">opt</span></span>
                   <input class="param-input" id="param-car-bat-until" type="number" min="0" max="100" step="1" value="${carBatUntil}">
@@ -687,7 +861,10 @@ function renderPopup(ctx) {
         </div>
         <button class="ph-nav-btn" id="pop-next" ${i === n - 1 ? "disabled" : ""}>\u203A</button>
       </div>
-      <button class="ph-close" id="pop-close">\u2715</button>
+      <div class="ph-actions">
+        ${deviceId || entryId ? `<button class="ph-bulk-btn" id="pop-bulk" title="Bulk edit slots">\u229E</button>` : ""}
+        <button class="ph-close" id="pop-close">\u2715</button>
+      </div>
     </div>
 
     <div class="pop-nav-wrap">
@@ -719,8 +896,40 @@ function renderPopup(ctx) {
   ""}
     </div>
 
-    ${config.layout?.show_actions !== false ? editHtml : ""}`;
+    ${config.layout?.show_actions !== false ? editHtml : ""}
+    ${(deviceId || entryId) && devicesAvailable.length > 0 ? (() => {
+    const slotDevices = slot.devices || [];
+    const devToggles = devicesAvailable.map((d, di) => {
+      const existing = slotDevices.find((sd) => sd.name === d.name);
+      const isOn = !!existing;
+      let control = "";
+      if (d.control === "modes") {
+        const modes = d.modes || [];
+        const sel = existing?.mode ?? modes[0];
+        control = `<select class="dev-toggle-select" data-dev-sched-mode="${di}">
+            ${modes.map((m) => `<option value="${m}"${m === sel ? " selected" : ""}>${m}</option>`).join("")}
+          </select>`;
+      } else if (d.control !== "switch") {
+        const watt = existing?.manual_override_w ?? existing?.allocated_wattage_w ?? d.default_wattage;
+        control = `<input class="dev-toggle-input" data-dev-sched-input="${di}" type="number" min="0" max="100000" step="100" value="${watt}">
+            <span class="dev-toggle-unit">W</span>`;
+      }
+      return `<div class="dev-toggle-card${isOn ? " on" : ""}" data-dev-sched="${di}">
+          <div class="dev-toggle-dot" style="background:${devColors[d.name] || "#3b82f6"}"></div>
+          <span class="dev-toggle-name">${d.name}</span>
+          ${control}
+        </div>`;
+    }).join("");
+    return `<div class="dev-toggle-section">
+        <div class="dev-toggle-title">Schedule Devices</div>
+        <div class="dev-toggle-list">${devToggles}</div>
+      </div>`;
+  })() : ""}`;
   sr.getElementById("pop-close").addEventListener("click", () => ctx.onClose());
+  sr.getElementById("pop-bulk")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    ctx.onBulkEdit();
+  });
   sr.getElementById("pop-prev").addEventListener("click", (e) => {
     e.stopPropagation();
     ctx.onNavigate(i - 1);
@@ -979,7 +1188,548 @@ function renderPopup(ctx) {
         });
       }
     });
+    const devSlotTime = slot.start ?? slot.time;
+    const deviceParams = (di) => {
+      const d = devicesAvailable[di];
+      if (d.control === "modes") {
+        const sel = sr.querySelector(`[data-dev-sched-mode="${di}"]`);
+        const mode = sel?.value ?? (d.modes || [])[0];
+        return mode ? { mode } : {};
+      }
+      if (d.control === "switch") return {};
+      const inp = sr.querySelector(`[data-dev-sched-input="${di}"]`);
+      const watt = inp ? parseFloat(inp.value) : NaN;
+      return { wattage: isNaN(watt) ? d.default_wattage : watt };
+    };
+    const scheduleDevice = (di, on) => hass.callService(
+      "ha_ems",
+      on ? "planning_device_slot" : "planning_device_clear",
+      {
+        device_id: deviceId || entryId,
+        time: devSlotTime,
+        device_name: devicesAvailable[di].name,
+        ...on ? deviceParams(di) : {}
+      }
+    );
+    sr.querySelectorAll(".dev-toggle-card[data-dev-sched]").forEach((card) => {
+      card.addEventListener("click", (e) => {
+        const tag = e.target.tagName;
+        if (tag === "INPUT" || tag === "SELECT" || tag === "OPTION") return;
+        e.stopPropagation();
+        card.classList.toggle("on");
+        const isOn = card.classList.contains("on");
+        const di = parseInt(card.dataset.devSched);
+        if (!devicesAvailable[di]) return;
+        scheduleDevice(di, isOn).catch((err) => {
+          card.classList.toggle("on", !isOn);
+          console.error("Device schedule error:", err);
+        });
+      });
+    });
+    sr.querySelectorAll("[data-dev-sched-input], [data-dev-sched-mode]").forEach((el) => {
+      el.addEventListener("click", (e) => e.stopPropagation());
+      el.addEventListener("change", (e) => {
+        e.stopPropagation();
+        const ds = el.dataset;
+        const di = parseInt(ds.devSchedInput ?? ds.devSchedMode);
+        if (!devicesAvailable[di]) return;
+        sr.querySelector(`[data-dev-sched="${di}"]`)?.classList.add("on");
+        scheduleDevice(di, true).catch((err) => console.error("Device schedule error:", err));
+      });
+    });
   }
+}
+
+// src/dashboard/dashboard-bulk-edit.ts
+var MINI_CHART_H = 46;
+var DEV_STATE_LABEL = {
+  ignore: "unchanged",
+  on: "schedule",
+  off: "clear"
+};
+function snap15(time) {
+  const [h, m] = time.split(":").map(Number);
+  const snapped = Math.round(m / 15) * 15;
+  const finalM = snapped % 60;
+  const finalH = h + Math.floor(snapped / 60);
+  return `${String(finalH % 24).padStart(2, "0")}:${String(finalM).padStart(2, "0")}`;
+}
+function slotToMinutes(slot) {
+  const d = new Date(slot.start ?? slot.time);
+  return d.getHours() * 60 + d.getMinutes();
+}
+function renderBulkEdit(ctx) {
+  const { sr, slots, config, hass, kwpEntityId } = ctx;
+  const n = slots.length;
+  if (n === 0) return;
+  const entryId = config.integration?.entry_id;
+  const deviceId = config.integration?.device_id;
+  const kwpW = Math.round((parseFloat(hass?.states[kwpEntityId]?.state) || 3) * 1e3);
+  const planEntity = ctx.planningEntityId || config.integration?.planning_entity;
+  const devicesAvailable = (planEntity ? hass?.states[planEntity]?.attributes?.devices_available : null) ?? [];
+  const prices = slots.map((s) => s.price);
+  const maxP = Math.max(...prices, 45);
+  let rangeFrom = 0;
+  let rangeTo = n - 1;
+  let filterMode = "all";
+  let threshold = Math.round((Math.min(...prices) + Math.max(...prices)) / 2 * 10) / 10;
+  let selAction = "idle";
+  let isDraggingRange = false;
+  let isDraggingThreshold = false;
+  const deviceIntents = {};
+  const deviceWattage = {};
+  const deviceMode = {};
+  for (const d of devicesAvailable) {
+    deviceIntents[d.name] = "ignore";
+    deviceWattage[d.name] = d.default_wattage;
+    deviceMode[d.name] = (d.modes || [])[0];
+  }
+  function getMatchedIndices() {
+    const matched = [];
+    for (let i = rangeFrom; i <= rangeTo; i++) {
+      const p = slots[i].price;
+      if (filterMode === "all") matched.push(i);
+      else if (filterMode === "below" && p < threshold) matched.push(i);
+      else if (filterMode === "above" && p > threshold) matched.push(i);
+    }
+    return matched;
+  }
+  function renderRangeUI() {
+    const matched = getMatchedIndices();
+    const barsHtml = slots.map((slot, i) => {
+      const h = Math.max(2, slot.price / maxP * MINI_CHART_H);
+      const dimmed = i < rangeFrom || i > rangeTo ? " dimmed" : "";
+      return `<div class="be-mini-bar${dimmed}" style="height:${h}px;background:${priceColor(slot.price)}"></div>`;
+    }).join("");
+    const leftPct = (rangeFrom / n * 100).toFixed(2);
+    const widthPct = ((rangeTo - rangeFrom + 1) / n * 100).toFixed(2);
+    const highlightHtml = `<div class="be-range-highlight" style="left:${leftPct}%;width:${widthPct}%"></div>`;
+    const thresholdHtml = filterMode !== "all" ? `<div class="be-threshold-line" id="be-threshold-line" style="bottom:${(threshold / maxP * 100).toFixed(1)}%">
+          <span class="be-threshold-label">${threshold.toFixed(1)} ct</span>
+        </div>` : "";
+    sr.getElementById("be-mini-chart").innerHTML = `<div class="be-mini-bars">${barsHtml}</div>${highlightHtml}${thresholdHtml}`;
+    sr.getElementById("be-from").value = slotTimeStr(slots[rangeFrom]);
+    sr.getElementById("be-to").value = slotTimeStr(slots[rangeTo]);
+    sr.getElementById("be-range-count").textContent = `${rangeTo - rangeFrom + 1} slots selected`;
+    sr.querySelectorAll(".be-filter-btn").forEach(
+      (btn) => btn.classList.toggle("sel", btn.dataset.filter === filterMode)
+    );
+    sr.getElementById("be-threshold").disabled = filterMode === "all";
+    const matchedSet = new Set(matched);
+    sr.getElementById("be-preview-strip").innerHTML = slots.map(
+      (slot, i) => `<div class="be-preview-seg ${matchedSet.has(i) ? "matched" : "unmatched"}" style="background:${priceColor(slot.price)}"></div>`
+    ).join("");
+    sr.getElementById("be-preview-info").innerHTML = `<b>${matched.length}</b> slot${matched.length !== 1 ? "s" : ""} matched`;
+    const applyBtn = sr.getElementById("be-apply");
+    applyBtn.textContent = `Apply to ${matched.length} slot${matched.length !== 1 ? "s" : ""}`;
+    applyBtn.disabled = matched.length === 0;
+  }
+  const actions = [
+    { key: "idle", label: "Idle", color: "#374151" },
+    { key: "charge", label: "Charge", color: "#16a34a" },
+    { key: "use_net", label: "Use Net", color: "#2563eb" },
+    { key: "discharge", label: "Discharge", color: "#dc2626" },
+    { key: "car_charge", label: "Car Charge", color: "#ca8a04" }
+  ];
+  const actionBtns = actions.map(
+    (a) => `<button class="ap-btn${selAction === a.key ? " sel" : ""}" data-action="${a.key}" style="--btn-c:${a.color}">
+      <div class="ap-dot" style="background:${a.color}"></div>${a.label}
+    </button>`
+  ).join("");
+  const devicesHtml = devicesAvailable.length > 0 ? `
+    <div class="dev-toggle-section">
+      <div class="dev-toggle-title">Devices</div>
+      <div class="dev-toggle-hint">Click to cycle: unchanged \u2192 schedule \u2192 clear</div>
+      <div class="dev-toggle-list">
+        ${devicesAvailable.map((d, di) => {
+    let control = "";
+    if (d.control === "modes") {
+      control = `<select class="dev-toggle-select" data-dev-mode="${di}">
+              ${(d.modes || []).map((m) => `<option value="${m}">${m}</option>`).join("")}
+            </select>`;
+    } else if (d.control !== "switch") {
+      control = `<input class="dev-toggle-input" data-dev-input="${di}" type="number" min="0" max="100000" step="100" value="${d.default_wattage}">
+              <span class="dev-toggle-unit">W</span>`;
+    }
+    return `<div class="dev-toggle-card" data-dev="${di}">
+            <div class="dev-toggle-dot" style="background:${ctx.devColors[d.name] || "#3b82f6"}"></div>
+            <span class="dev-toggle-name">${d.name}</span>
+            <span class="dev-toggle-state" data-dev-state="${di}">unchanged</span>
+            ${control}
+          </div>`;
+  }).join("")}
+      </div>
+    </div>` : "";
+  sr.getElementById("popup").innerHTML = `
+    <div class="be-header">
+      <div class="be-header-left">
+        <button class="be-back" id="be-back" title="Back to slot">\u2039</button>
+        <span class="be-title">\u229E Bulk Edit</span>
+      </div>
+      <button class="be-close" id="be-close">\u2715</button>
+    </div>
+
+    <div class="be-range-section">
+      <div class="be-section-label">Select Time Range</div>
+      <div class="be-mini-chart" id="be-mini-chart"></div>
+      <div class="be-time-row">
+        <div class="be-time-field">
+          <span class="be-time-label">From</span>
+          <input class="be-time-input" id="be-from" type="text" placeholder="00:00">
+        </div>
+        <div class="be-time-field">
+          <span class="be-time-label">To</span>
+          <input class="be-time-input" id="be-to" type="text" placeholder="23:45">
+        </div>
+        <div style="flex:1"></div>
+        <span class="be-range-count" id="be-range-count"></span>
+      </div>
+    </div>
+
+    <div class="be-filter-section">
+      <div class="be-section-label">Price Filter</div>
+      <div class="be-filter-row">
+        <button class="be-filter-btn" data-filter="all">All</button>
+        <button class="be-filter-btn" data-filter="below">Below</button>
+        <button class="be-filter-btn" data-filter="above">Above</button>
+        <input class="be-filter-input" id="be-threshold" type="number" step="0.1" value="${threshold}">
+        <span class="be-filter-unit">ct</span>
+      </div>
+    </div>
+
+    <div class="be-preview-section">
+      <div class="be-preview-info" id="be-preview-info"></div>
+      <div class="be-preview-strip" id="be-preview-strip"></div>
+    </div>
+
+    <div class="be-action-section">
+      <div class="be-section-label">Action</div>
+      <div class="action-editor">
+        <div class="ap-grid">${actionBtns}</div>
+        <div class="params-panel">
+          <div class="action-params" id="be-params-charge" style="${selAction === "charge" ? "" : "display:none"}">
+            <div class="param-row">
+              <span class="param-label">Power</span>
+              <input class="param-input" id="be-charge-w" type="number" min="0" max="100000" step="100" value="${kwpW}">
+              <span class="param-unit">W</span>
+            </div>
+            <div class="param-row">
+              <span class="param-label">Until %<span class="param-optional">opt</span></span>
+              <input class="param-input" id="be-charge-until" type="number" min="0" max="100" step="1" value="">
+              <span class="param-unit">%</span>
+            </div>
+          </div>
+          <div class="action-params" id="be-params-discharge" style="${selAction === "discharge" ? "" : "display:none"}">
+            <div class="param-row">
+              <span class="param-label">Power</span>
+              <input class="param-input" id="be-discharge-w" type="number" min="0" max="100000" step="100" value="${kwpW}">
+              <span class="param-unit">W</span>
+            </div>
+            <div class="param-row">
+              <span class="param-label">Until %<span class="param-optional">opt</span></span>
+              <input class="param-input" id="be-discharge-until" type="number" min="0" max="100" step="1" value="">
+              <span class="param-unit">%</span>
+            </div>
+          </div>
+          <div class="action-params" id="be-params-use_net" style="${selAction === "use_net" ? "" : "display:none"}">
+            <div class="param-row">
+              <span class="param-label">Max draw<span class="param-optional">opt</span></span>
+              <input class="param-input" id="be-usenet-max" type="number" min="0" max="100000" step="100" value="${kwpW}">
+              <span class="param-unit">W</span>
+            </div>
+            <button class="toggle-btn on" id="be-usenet-solar" style="--tc:#f59e0b">
+              <div class="toggle-btn-dot"></div>\u2600 Use Solar
+            </button>
+          </div>
+          <div class="action-params" id="be-params-car_charge" style="${selAction === "car_charge" ? "" : "display:none"}">
+            <button class="toggle-btn on" id="be-car-solar" style="--tc:#f59e0b">
+              <div class="toggle-btn-dot"></div>\u2600 Use Solar
+            </button>
+            <div class="watt-card" id="be-wc-car-net" style="--wc-c:#2563eb">
+              <div class="watt-card-header">
+                <div class="watt-card-dot"></div>
+                <span class="watt-card-label">Net Grid</span>
+              </div>
+              <div class="watt-card-input-wrap">
+                <div class="watt-card-row">
+                  <span class="watt-card-sub-label">Wattage</span>
+                  <input class="param-input" id="be-car-net-w" type="number" min="0" max="100000" step="100" value="${kwpW}">
+                  <span class="param-unit">W</span>
+                </div>
+              </div>
+            </div>
+            <div class="watt-card" id="be-wc-car-bat" style="--wc-c:#7c3aed">
+              <div class="watt-card-header">
+                <div class="watt-card-dot"></div>
+                <span class="watt-card-label">Battery</span>
+              </div>
+              <div class="watt-card-input-wrap">
+                <div class="watt-card-row">
+                  <span class="watt-card-sub-label">Budget</span>
+                  <input class="param-input" id="be-car-bat-w" type="number" min="-100000" max="100000" step="100" value="${kwpW}">
+                  <span class="param-unit">W</span>
+                </div>
+                <div class="watt-card-hint">+ car draws from the battery &nbsp;\xB7&nbsp; \u2212 charges the battery too</div>
+                <div class="watt-card-row">
+                  <span class="watt-card-sub-label">Until %<span class="param-optional">opt</span></span>
+                  <input class="param-input" id="be-car-bat-until" type="number" min="0" max="100" step="1" value="">
+                  <span class="param-unit">%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    ${devicesHtml}
+
+    <div class="be-apply-row">
+      <button class="be-apply-btn" id="be-apply"></button>
+    </div>
+  `;
+  sr.getElementById("be-close").addEventListener("click", () => ctx.onClose());
+  sr.getElementById("be-back").addEventListener("click", () => ctx.onBack());
+  const miniChart = sr.getElementById("be-mini-chart");
+  const idxAtClientX = (clientX) => {
+    const rect = miniChart.getBoundingClientRect();
+    const idx = Math.floor((clientX - rect.left) / rect.width * n);
+    return Math.max(0, Math.min(n - 1, idx));
+  };
+  const beginRange = (clientX) => {
+    isDraggingRange = true;
+    rangeFrom = idxAtClientX(clientX);
+    rangeTo = rangeFrom;
+    renderRangeUI();
+  };
+  const extendRange = (clientX) => {
+    const clamped = idxAtClientX(clientX);
+    if (clamped >= rangeFrom) rangeTo = clamped;
+    else {
+      rangeTo = rangeFrom;
+      rangeFrom = clamped;
+    }
+    renderRangeUI();
+  };
+  const updateThreshold = (clientY) => {
+    const rect = miniChart.getBoundingClientRect();
+    const pct = 1 - Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
+    threshold = Math.round(pct * maxP * 10) / 10;
+    const input = sr.getElementById("be-threshold");
+    if (input) input.value = String(threshold);
+    renderRangeUI();
+  };
+  const endDrag = (e) => {
+    isDraggingRange = false;
+    isDraggingThreshold = false;
+    const id = e.pointerId;
+    if (miniChart.hasPointerCapture?.(id)) miniChart.releasePointerCapture(id);
+  };
+  miniChart.addEventListener("pointerdown", (e) => {
+    const pe = e;
+    if (pe.button !== 0 && pe.pointerType === "mouse") return;
+    pe.preventDefault();
+    miniChart.setPointerCapture(pe.pointerId);
+    if (pe.target.closest(".be-threshold-line")) {
+      isDraggingThreshold = true;
+    } else {
+      beginRange(pe.clientX);
+    }
+  });
+  miniChart.addEventListener("pointermove", (e) => {
+    const pe = e;
+    if (isDraggingThreshold) updateThreshold(pe.clientY);
+    else if (isDraggingRange) extendRange(pe.clientX);
+  });
+  miniChart.addEventListener("pointerup", endDrag);
+  miniChart.addEventListener("pointercancel", endDrag);
+  const closestSlotTo = (mins) => {
+    let closest = 0;
+    for (let i = 0; i < n; i++) {
+      if (Math.abs(slotToMinutes(slots[i]) - mins) < Math.abs(slotToMinutes(slots[closest]) - mins)) closest = i;
+    }
+    return closest;
+  };
+  const parseTimeField = (input) => {
+    const snapped = snap15(input.value);
+    input.value = snapped;
+    const [h, m] = snapped.split(":").map(Number);
+    return h * 60 + m;
+  };
+  const fromInput = sr.getElementById("be-from");
+  const toInput = sr.getElementById("be-to");
+  fromInput.addEventListener("change", () => {
+    rangeFrom = closestSlotTo(parseTimeField(fromInput));
+    if (rangeFrom > rangeTo) rangeTo = rangeFrom;
+    renderRangeUI();
+  });
+  toInput.addEventListener("change", () => {
+    rangeTo = closestSlotTo(parseTimeField(toInput));
+    if (rangeTo < rangeFrom) rangeFrom = rangeTo;
+    renderRangeUI();
+  });
+  sr.querySelectorAll(".be-filter-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      filterMode = btn.dataset.filter;
+      renderRangeUI();
+    });
+  });
+  const threshInput = sr.getElementById("be-threshold");
+  threshInput.addEventListener("input", () => {
+    threshold = parseFloat(threshInput.value) || 0;
+    renderRangeUI();
+  });
+  sr.querySelectorAll(".be-action-section .ap-btn[data-action]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      selAction = btn.dataset.action;
+      sr.querySelectorAll(".be-action-section .ap-btn[data-action]").forEach((b) => b.classList.toggle("sel", b === btn));
+      ["charge", "discharge", "use_net", "car_charge"].forEach((a) => {
+        const el = sr.getElementById(`be-params-${a}`);
+        if (el) el.style.display = a === selAction ? "" : "none";
+      });
+    });
+  });
+  ["be-usenet-solar", "be-car-solar"].forEach((id) => {
+    const btn = sr.getElementById(id);
+    if (btn) btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      btn.classList.toggle("on");
+    });
+  });
+  ["be-wc-car-net", "be-wc-car-bat"].forEach((id) => {
+    const card = sr.getElementById(id);
+    if (!card) return;
+    card.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (e.target.tagName === "INPUT") return;
+      card.classList.toggle("on");
+    });
+    card.querySelectorAll("input").forEach((inp) => inp.addEventListener("click", (e) => e.stopPropagation()));
+  });
+  sr.querySelectorAll(".dev-toggle-card[data-dev]").forEach((card) => {
+    card.addEventListener("click", (e) => {
+      const tag = e.target.tagName;
+      if (tag === "INPUT" || tag === "SELECT" || tag === "OPTION") return;
+      e.stopPropagation();
+      const di = parseInt(card.dataset.dev);
+      const name = devicesAvailable[di].name;
+      const next = deviceIntents[name] === "ignore" ? "on" : deviceIntents[name] === "on" ? "off" : "ignore";
+      deviceIntents[name] = next;
+      card.classList.toggle("on", next === "on");
+      card.classList.toggle("off", next === "off");
+      const label = sr.querySelector(`[data-dev-state="${di}"]`);
+      if (label) label.textContent = DEV_STATE_LABEL[next];
+    });
+  });
+  sr.querySelectorAll(".dev-toggle-input[data-dev-input]").forEach((inp) => {
+    inp.addEventListener("click", (e) => e.stopPropagation());
+    inp.addEventListener("change", () => {
+      const di = parseInt(inp.dataset.devInput);
+      deviceWattage[devicesAvailable[di].name] = parseFloat(inp.value) || 0;
+    });
+  });
+  sr.querySelectorAll(".dev-toggle-select[data-dev-mode]").forEach((sel) => {
+    sel.addEventListener("click", (e) => e.stopPropagation());
+    sel.addEventListener("change", () => {
+      const di = parseInt(sel.dataset.devMode);
+      deviceMode[devicesAvailable[di].name] = sel.value;
+    });
+  });
+  sr.querySelectorAll(".be-action-section .param-input, .be-time-input, .be-filter-input").forEach((el) => {
+    el.addEventListener("click", (e) => e.stopPropagation());
+  });
+  sr.getElementById("be-apply").addEventListener("click", async (e) => {
+    e.stopPropagation();
+    const applyBtn = sr.getElementById("be-apply");
+    const matched = getMatchedIndices();
+    if (matched.length === 0) return;
+    applyBtn.disabled = true;
+    applyBtn.textContent = `Applying\u2026 (0/${matched.length})`;
+    const commonBase = { device_id: deviceId || entryId };
+    const numVal = (id, fallback) => {
+      const v = parseFloat(sr.getElementById(id)?.value);
+      return isNaN(v) ? fallback : v;
+    };
+    const optNumVal = (id) => {
+      const v = sr.getElementById(id)?.value;
+      return v !== "" && v != null ? parseFloat(v) : null;
+    };
+    try {
+      for (let mi = 0; mi < matched.length; mi++) {
+        const slot = slots[matched[mi]];
+        const slotTime = slot.start ?? slot.time;
+        const commonData = { ...commonBase, time: slotTime, locked: true };
+        if (selAction === "idle") {
+          await hass.callService("ha_ems", "planning_idle", commonData);
+        } else if (selAction === "charge") {
+          const untilPct = optNumVal("be-charge-until");
+          await hass.callService(
+            "ha_ems",
+            "planning_charge",
+            { ...commonData, wattage: numVal("be-charge-w", kwpW), ...untilPct != null ? { until_pct: untilPct } : {} }
+          );
+        } else if (selAction === "discharge") {
+          const untilPct = optNumVal("be-discharge-until");
+          await hass.callService(
+            "ha_ems",
+            "planning_discharge",
+            { ...commonData, wattage: numVal("be-discharge-w", kwpW), ...untilPct != null ? { until_pct: untilPct } : {} }
+          );
+        } else if (selAction === "use_net") {
+          const maxWatts = optNumVal("be-usenet-max");
+          const useSolar = sr.getElementById("be-usenet-solar")?.classList.contains("on") ?? true;
+          await hass.callService(
+            "ha_ems",
+            "planning_use_net",
+            { ...commonData, use_solar: useSolar, ...maxWatts != null ? { max_wattage: maxWatts } : {} }
+          );
+        } else if (selAction === "car_charge") {
+          const useSolar = sr.getElementById("be-car-solar")?.classList.contains("on") ?? true;
+          const netCardOn = sr.getElementById("be-wc-car-net")?.classList.contains("on") ?? false;
+          const batCardOn = sr.getElementById("be-wc-car-bat")?.classList.contains("on") ?? false;
+          const batUntil = batCardOn ? optNumVal("be-car-bat-until") : null;
+          await hass.callService("ha_ems", "planning_car_charge_slot", {
+            ...commonData,
+            use_solar: useSolar,
+            use_net_wattage: netCardOn ? numVal("be-car-net-w", 0) : 0,
+            use_battery_wattage: batCardOn ? numVal("be-car-bat-w", 0) : 0,
+            ...batUntil != null ? { use_battery_until_pct: batUntil } : {}
+          });
+        }
+        for (const d of devicesAvailable) {
+          const intent = deviceIntents[d.name];
+          if (intent === "ignore") continue;
+          let params = {};
+          if (intent === "on" && d.control === "modes") {
+            const mode = deviceMode[d.name];
+            if (mode) params = { mode };
+          } else if (intent === "on" && d.control !== "switch") {
+            params = { wattage: deviceWattage[d.name] };
+          }
+          await hass.callService(
+            "ha_ems",
+            intent === "on" ? "planning_device_slot" : "planning_device_clear",
+            { ...commonBase, time: slotTime, device_name: d.name, ...params }
+          );
+        }
+        applyBtn.textContent = `Applying\u2026 (${mi + 1}/${matched.length})`;
+      }
+      applyBtn.textContent = "\u2713 Applied";
+      applyBtn.classList.add("success");
+      setTimeout(() => {
+        ctx.onApplied();
+        ctx.onClose();
+      }, 800);
+    } catch (err) {
+      applyBtn.textContent = "\u2715 Error";
+      applyBtn.classList.add("error");
+      applyBtn.disabled = false;
+      console.error("Bulk edit error:", err);
+    }
+  });
+  renderRangeUI();
 }
 
 // src/dashboard/dashboard.ts
@@ -1014,7 +1764,9 @@ var EmsDashboardCard = class extends HTMLElement {
       this._resolveDeviceEntities(deviceId);
     }
     const slots = this._buildSlots(hass);
-    const ser = JSON.stringify(slots);
+    const battEntity = resolveBatteryEntity(this._config, hass, this._planningEntityId);
+    const battState = battEntity ? hass?.states[battEntity]?.state : "";
+    const ser = JSON.stringify(slots) + "|" + battState;
     if (ser !== this._lastSer) {
       this._lastSer = ser;
       this._slots = slots;
@@ -1075,6 +1827,7 @@ var EmsDashboardCard = class extends HTMLElement {
           locked: false,
           action_config: {},
           car: {},
+          devices: [],
           battery_prediction: null
         };
       });
@@ -1102,6 +1855,7 @@ var EmsDashboardCard = class extends HTMLElement {
             locked: p.locked ?? slot.locked,
             action_config: p.action_config ?? slot.action_config,
             car: p.car ?? slot.car,
+            devices: p.devices ?? slot.devices,
             battery_prediction: p.battery_prediction ?? slot.battery_prediction,
             price: slot.price || p.price || 0,
             _injPrice: slot._injPrice || p.injection_price || 0
@@ -1195,10 +1949,12 @@ var EmsDashboardCard = class extends HTMLElement {
                 <div class="bars" id="bars" style="height:${CHART_H}px"></div>
                 <svg class="battery-svg" id="battery-svg" style="position:absolute;top:0;left:0;width:100%;height:${CHART_H}px;pointer-events:none;overflow:visible;" hidden></svg>
                 <div class="action-strip" id="action-strip"></div>
+                <div class="device-strip" id="device-strip" hidden></div>
                 <div class="x-axis" id="x-axis"></div>
               </div>
             </div>
           </div>
+          <div class="batt-axis" id="batt-axis" style="height:${CHART_H}px" hidden></div>
         </div>
         <div class="brush-wrap" id="brush-wrap">
           <div class="brush-label-row">
@@ -1297,6 +2053,21 @@ var EmsDashboardCard = class extends HTMLElement {
         lines.push("<b>integration.planning_entity:</b> not configured (no device_id or planning_entity set)");
       }
       lines.push("");
+      {
+        const battEntity2 = resolveBatteryEntity(this._config, this._hass, this._planningEntityId);
+        const src = this._config.integration?.battery_entity ? "card config" : battEntity2 ? "integration" : "(none)";
+        lines.push(`<b>battery entity:</b> ${battEntity2 || "not resolved"} (from ${src})`);
+        if (battEntity2) {
+          const bs = this._hass?.states[battEntity2];
+          lines.push(`<b>  state:</b> ${bs ? bs.state : "\u26A0 entity not found in hass.states"}`);
+        }
+        const planState2 = planEntity ? this._hass?.states[planEntity] : null;
+        lines.push(`<b>  battery_size_kwh:</b> ${planState2?.attributes?.battery_size_kwh ?? "not configured \u2014 backend skips SoC simulation"}`);
+        const withPred = slots.filter((sl) => sl.battery_prediction != null).length;
+        lines.push(`<b>  slots with battery_prediction:</b> ${withPred} / ${slots.length}`);
+        lines.push(`<b>  show_battery:</b> ${this._config.layout?.show_battery !== false}`);
+      }
+      lines.push("");
       lines.push(`<b>parsed slots (this day):</b> ${slots.length}`);
       const actionCounts = {};
       for (const s of slots) {
@@ -1354,18 +2125,21 @@ var EmsDashboardCard = class extends HTMLElement {
         });
       });
     }
-    renderMainChart(sr, slots, this._config, this._hass, ns, (i) => this._openPopup(i));
-    renderBatteryOverlay(sr, slots, this._config, this._hass);
+    renderMainChart(sr, slots, this._config, this._hass, ns, this._devColors, (i) => this._openPopup(i));
+    renderBatteryOverlay(sr, slots, this._config, this._hass, this._planningEntityId);
     const avg = prices.reduce((a, b) => a + b, 0) / n;
     const min = Math.min(...prices);
     const max = Math.max(...prices);
     {
       const curSlot = ns >= 0 ? slots[ns] : null;
       const hasInj = !!this._config.price?.injection_price_key;
+      const curScore = curSlot ? priceScore(curSlot.price, prices) : 0;
+      const curScoreCol = curSlot ? priceScoreColor(curScore) : "";
       const curCard = curSlot ? `<div class="stat-card">
             <div class="stat-label">Current</div>
             <div class="stat-price-row">
               <span class="stat-value">${curSlot.price.toFixed(2)}<span class="stat-unit">ct</span></span>
+              <span class="stat-score" style="color:${curScoreCol}">${curScore}/10</span>
               ${hasInj ? `<span class="stat-inj">\u2191 ${curSlot._injPrice.toFixed(2)} ct</span>` : ""}
             </div>
             <div class="stat-action" style="color:${slotAction(curSlot).color}">\u25CF ${slotAction(curSlot).label}</div>
@@ -1470,9 +2244,30 @@ var EmsDashboardCard = class extends HTMLElement {
       config: this._config,
       hass: this._hass,
       kwpEntityId: this._kwpEntityId,
+      planningEntityId: this._planningEntityId,
       devColors: this._devColors,
       onClose: () => this._closePopup(),
-      onNavigate: (j) => this._navigateSlot(j)
+      onNavigate: (j) => this._navigateSlot(j),
+      onBulkEdit: () => this._openBulkEdit(i)
+    });
+  }
+  _openBulkEdit(fromIdx) {
+    this._activeIdx = fromIdx;
+    this.shadowRoot.getElementById("tooltip").classList.remove("visible");
+    renderBulkEdit({
+      sr: this.shadowRoot,
+      slots: this._filteredSlots,
+      config: this._config,
+      hass: this._hass,
+      kwpEntityId: this._kwpEntityId,
+      planningEntityId: this._planningEntityId,
+      devColors: this._devColors,
+      onClose: () => this._closePopup(),
+      onBack: () => this._renderPopup(fromIdx),
+      onApplied: () => {
+        this._lastSer = "";
+        this.hass = this._hass;
+      }
     });
   }
   _onKey(e) {
