@@ -123,9 +123,11 @@ export function renderPopup(ctx: DialogContext): void {
     const netW = curAction === 'use_net' ? (aCfg.max_wattage ?? kwpW) : kwpW;
     const solarOnUseNet = curAction === 'use_net' ? (aCfg.use_solar !== false) : true;
     const solarOnCar = curAction === 'car_charge' ? (aCfg.use_solar !== false) : true;
-    const carNetOn = curAction === 'car_charge' && (aCfg.use_net_wattage ?? 0) > 0;
+    // Any non-zero stored value means the card was on. `> 0` used to drop
+    // negative wattages, so they saved fine but came back collapsed.
+    const carNetOn = curAction === 'car_charge' && (aCfg.use_net_wattage ?? 0) !== 0;
     const carNetW = curAction === 'car_charge' ? (aCfg.use_net_wattage ?? kwpW) : kwpW;
-    const carBatOn = curAction === 'car_charge' && (aCfg.use_battery_wattage ?? 0) > 0;
+    const carBatOn = curAction === 'car_charge' && (aCfg.use_battery_wattage ?? 0) !== 0;
     const carBatW = curAction === 'car_charge' ? (aCfg.use_battery_wattage ?? kwpW) : kwpW;
     const carBatUntil = curAction === 'car_charge' ? (aCfg.use_battery_until_pct ?? '') : '';
 
@@ -192,10 +194,11 @@ export function renderPopup(ctx: DialogContext): void {
               </div>
               <div class="watt-card-input-wrap">
                 <div class="watt-card-row">
-                  <span class="watt-card-sub-label">Wattage</span>
-                  <input class="param-input" id="param-car-bat-w" type="number" min="0" max="100000" step="100" value="${carBatW}">
+                  <span class="watt-card-sub-label">Budget</span>
+                  <input class="param-input" id="param-car-bat-w" type="number" min="-100000" max="100000" step="100" value="${carBatW}">
                   <span class="param-unit">W</span>
                 </div>
+                <div class="watt-card-hint">+ car draws from the battery &nbsp;·&nbsp; − charges the battery too</div>
                 <div class="watt-card-row">
                   <span class="watt-card-sub-label">Until %<span class="param-optional">opt</span></span>
                   <input class="param-input" id="param-car-bat-until" type="number" min="0" max="100" step="1" value="${carBatUntil}">

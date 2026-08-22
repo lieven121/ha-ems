@@ -217,6 +217,7 @@ header span{font-family:var(--code-font-family, monospace);font-size:10px;color:
 .watt-card.on .watt-card-input-wrap{display:flex;}
 .watt-card-row{display:flex;align-items:center;gap:7px;}
 .watt-card-sub-label{font-family:var(--code-font-family,monospace);font-size:9px;color:var(--text-dim);white-space:nowrap;min-width:50px;}
+.watt-card-hint{font-family:var(--code-font-family,monospace);font-size:8px;color:var(--text-dim);opacity:.75;line-height:1.4;}
 .car-sep{width:1px;background:var(--border);flex-shrink:0;margin:0 4px;}
 .action-locked-row{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);}
 .action-locked-label{font-family:var(--code-font-family,monospace);font-size:9px;color:var(--text-dim);}
