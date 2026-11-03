@@ -13,6 +13,7 @@ from typing import Any
 from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
@@ -34,10 +35,31 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: EMSCoordinator = hass.data[DOMAIN][config_entry.entry_id]
-    async_add_entities(
+    sensors = [
         EMSDeviceSensor(coordinator, config_entry, device)
         for device in coordinator.configured_devices
-    )
+    ]
+    _remove_stale_device_entities(hass, config_entry, {s.unique_id for s in sensors})
+    async_add_entities(sensors)
+
+
+def _remove_stale_device_entities(
+    hass: HomeAssistant, config_entry: ConfigEntry, keep: set[str | None]
+) -> None:
+    """Remove the entities of devices that were deleted from the config.
+
+    A reload only stops creating them; their registry entries would otherwise
+    linger as permanently unavailable entities.
+    """
+    prefix = f"{config_entry.entry_id}_{ENTITY_DEVICE_PREFIX}_"
+    registry = er.async_get(hass)
+    for entity in er.async_entries_for_config_entry(registry, config_entry.entry_id):
+        if (
+            entity.domain == "binary_sensor"
+            and entity.unique_id.startswith(prefix)
+            and entity.unique_id not in keep
+        ):
+            registry.async_remove(entity.entity_id)
 
 
 class EMSDeviceSensor(CoordinatorEntity[EMSCoordinator], BinarySensorEntity):
