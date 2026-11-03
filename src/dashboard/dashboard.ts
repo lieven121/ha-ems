@@ -1,7 +1,7 @@
 import { CSS } from '../shared/styles';
 import { CHART_H, DEVICE_PALETTE } from '../shared/constants';
 import { Slot, CardConfig } from '../shared/types';
-import { localDateStr, slotAction, slotTimeStr, priceColor, priceScore, priceScoreColor } from '../shared/utils';
+import { esc, localDateStr, slotAction, slotTimeStr, priceColor, priceScore, priceScoreColor } from '../shared/utils';
 import { renderMainChart, renderBatteryOverlay, renderBrush, resolveBatteryEntity, scrollToSlot } from './dashboard-graph';
 import { DialogContext, renderPopup } from './dashboard-dialog';
 import { renderBulkEdit } from './dashboard-bulk-edit';
@@ -533,7 +533,7 @@ export class EmsDashboardCard extends HTMLElement {
       ${devNames.length ? `<div>
         <div class="legend-title">Devices</div>
         <div class="legend-items">
-          ${devNames.map(n => `<div class="li"><div class="ls" style="background:${this._devColors[n]}"></div>${n}</div>`).join('')}
+          ${devNames.map(n => `<div class="li"><div class="ls" style="background:${this._devColors[n]}"></div>${esc(n)}</div>`).join('')}
         </div>
       </div>` : ''}`;
     (legendEl as HTMLElement).hidden = !showPriceLegend && !showActionLegend && !devNames.length;

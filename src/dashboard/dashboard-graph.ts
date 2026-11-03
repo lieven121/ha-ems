@@ -1,6 +1,6 @@
 import { Slot, CardConfig } from '../shared/types';
 import { BATT_AXIS_TICKS, CHART_H, Y_STEPS } from '../shared/constants';
-import { priceColor, priceScore, priceScoreColor, slotAction, slotHasCar, slotTimeStr, slotEndTimeStr } from '../shared/utils';
+import { esc, priceColor, priceScore, priceScoreColor, slotAction, slotHasCar, slotTimeStr, slotEndTimeStr } from '../shared/utils';
 
 export function renderMainChart(
   sr: ShadowRoot,
@@ -104,7 +104,7 @@ export function renderMainChart(
         `<div class="dc-pip" style="background:${devColors[d.name] || '#3b82f6'}"></div>`
       ).join('');
       const names = (slot.devices || []).map(d => d.name).join(', ');
-      return `<div class="dc" data-i="${i}" title="${names}">${pips}</div>`;
+      return `<div class="dc" data-i="${i}" title="${esc(names)}">${pips}</div>`;
     }).join('');
     deviceStrip.querySelectorAll('.dc').forEach(el => {
       el.addEventListener('click', () => onSlotClick(+(el as HTMLElement).dataset.i!));

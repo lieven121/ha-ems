@@ -1,5 +1,5 @@
 import { DeviceAvailable, Slot, CardConfig } from '../shared/types';
-import { priceColor, slotTimeStr } from '../shared/utils';
+import { esc, priceColor, slotTimeStr } from '../shared/utils';
 
 export interface BulkEditContext {
   sr: ShadowRoot;
@@ -153,7 +153,7 @@ export function renderBulkEdit(ctx: BulkEditContext): void {
           let control = '';
           if (d.control === 'modes') {
             control = `<select class="dev-toggle-select" data-dev-mode="${di}">
-              ${(d.modes || []).map(m => `<option value="${m}">${m}</option>`).join('')}
+              ${(d.modes || []).map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('')}
             </select>`;
           } else if (d.control !== 'switch') {
             control = `<input class="dev-toggle-input" data-dev-input="${di}" type="number" min="0" max="100000" step="100" value="${d.default_wattage}">
@@ -161,7 +161,7 @@ export function renderBulkEdit(ctx: BulkEditContext): void {
           }
           return `<div class="dev-toggle-card" data-dev="${di}">
             <div class="dev-toggle-dot" style="background:${ctx.devColors[d.name] || '#3b82f6'}"></div>
-            <span class="dev-toggle-name">${d.name}</span>
+            <span class="dev-toggle-name">${esc(d.name)}</span>
             <span class="dev-toggle-state" data-dev-state="${di}">unchanged</span>
             ${control}
           </div>`;

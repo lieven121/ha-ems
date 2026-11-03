@@ -1,5 +1,16 @@
 import { Slot, ActionInfo } from './types';
 
+/** Escape text for use inside HTML built with template strings (element
+ *  content or a quoted attribute). Device and mode names are user-entered. */
+export function esc(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 /**
  * Compute a price score from 1 (expensive) to 10 (cheap) based on
  * where the price sits in the percentile distribution of all prices.

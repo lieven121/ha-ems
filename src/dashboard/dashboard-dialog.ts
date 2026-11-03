@@ -1,5 +1,5 @@
 import { DeviceAvailable, Slot, CardConfig } from '../shared/types';
-import { priceColor, priceScore, priceScoreColor, slotAction, slotTimeStr, slotEndTimeStr } from '../shared/utils';
+import { esc, priceColor, priceScore, priceScoreColor, slotAction, slotTimeStr, slotEndTimeStr } from '../shared/utils';
 
 interface SlotClipboard {
   action: string;
@@ -95,7 +95,7 @@ export function renderPopup(ctx: DialogContext): void {
     ? `<div class="device-list">${slot.devices!.map(d => `
         <div class="device-item">
           <div class="device-dot" style="background:${devColors[d.name]||'#3b82f6'}"></div>
-          <div class="device-name">${d.name}</div>
+          <div class="device-name">${esc(d.name)}</div>
           <div class="device-watt">${d.manual_override_w ?? d.allocated_wattage_w} W</div>
         </div>`).join('')}</div>`
     : `<div style="font-family:var(--code-font-family, monospace);font-size:10px;color:var(--text-dim);margin-top:4px">No devices scheduled</div>`;
@@ -284,7 +284,7 @@ export function renderPopup(ctx: DialogContext): void {
           const modes = d.modes || [];
           const sel = existing?.mode ?? modes[0];
           control = `<select class="dev-toggle-select" data-dev-sched-mode="${di}">
-            ${modes.map(m => `<option value="${m}"${m === sel ? ' selected' : ''}>${m}</option>`).join('')}
+            ${modes.map(m => `<option value="${esc(m)}"${m === sel ? ' selected' : ''}>${esc(m)}</option>`).join('')}
           </select>`;
         } else if (d.control !== 'switch') {
           const watt = existing?.manual_override_w ?? existing?.allocated_wattage_w ?? d.default_wattage;
@@ -293,7 +293,7 @@ export function renderPopup(ctx: DialogContext): void {
         }
         return `<div class="dev-toggle-card${isOn ? ' on' : ''}" data-dev-sched="${di}">
           <div class="dev-toggle-dot" style="background:${devColors[d.name] || '#3b82f6'}"></div>
-          <span class="dev-toggle-name">${d.name}</span>
+          <span class="dev-toggle-name">${esc(d.name)}</span>
           ${control}
         </div>`;
       }).join('');
