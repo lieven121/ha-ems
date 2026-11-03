@@ -94,9 +94,7 @@ class EMSDeviceSensor(CoordinatorEntity[EMSCoordinator], BinarySensorEntity):
         return None
 
     def _current_slot(self) -> dict | None:
-        slots: list[dict] = self.coordinator.data or []
-        idx = self.coordinator._nowslot_idx(slots)
-        return slots[idx] if idx is not None else None
+        return self.coordinator.current_slot
 
     @property
     def is_on(self) -> bool:
@@ -105,9 +103,8 @@ class EMSDeviceSensor(CoordinatorEntity[EMSCoordinator], BinarySensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         slots: list[dict] = self.coordinator.data or []
-        idx = self.coordinator._nowslot_idx(slots)
-        current = slots[idx] if idx is not None else None
-        entry = self._slot_entry(current)
+        idx = self.coordinator.current_slot_index
+        entry = self._slot_entry(self.coordinator.current_slot)
 
         attrs: dict[str, Any] = {
             "device_name": self._device_name,

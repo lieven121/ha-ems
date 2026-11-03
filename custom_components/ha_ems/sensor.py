@@ -53,11 +53,8 @@ class EMSPlanningSensor(CoordinatorEntity[EMSCoordinator], SensorEntity):
 
     @property
     def native_value(self) -> str:
-        slots: list[dict] = self.coordinator.data or []
-        idx = self.coordinator._nowslot_idx(slots)
-        if idx is not None:
-            return slots[idx]["action"]
-        return "unknown"
+        slot = self.coordinator.current_slot
+        return slot["action"] if slot else "unknown"
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -94,9 +91,7 @@ class EMSCurrentActionSensor(CoordinatorEntity[EMSCoordinator], SensorEntity):
         self._attr_device_info = coordinator.device_info
 
     def _current_slot(self) -> dict | None:
-        slots: list[dict] = self.coordinator.data or []
-        idx = self.coordinator._nowslot_idx(slots)
-        return slots[idx] if idx is not None else None
+        return self.coordinator.current_slot
 
     @property
     def native_value(self) -> str:

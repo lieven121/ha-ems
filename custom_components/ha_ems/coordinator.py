@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import math
+from functools import cached_property
 
 from datetime import datetime, timedelta
 from typing import Any
@@ -14,7 +15,7 @@ from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.event import async_track_point_in_time, async_track_state_change_event
 from homeassistant.helpers.storage import Store
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util.dt import now, parse_datetime
 
 from .const import (
@@ -89,6 +90,9 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         self._kwp: float = DEFAULT_KWP  # max charge power in watts
 
         self._last_action: str | None = None
+        # Index into self.data of the slot containing "now", recomputed on
+        # every refresh (and a refresh is scheduled at each slot boundary).
+        self.current_slot_index: int | None = None
         self._unsub_slot_timer: Any | None = None  # cancels current slot-boundary timer
 
     # ------------------------------------------------------------------
@@ -108,9 +112,12 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
     # Schedulable devices
     # ------------------------------------------------------------------
 
-    @property
+    @cached_property
     def configured_devices(self) -> list[dict[str, Any]]:
-        """Return the configured non-battery devices, normalised."""
+        """Return the configured non-battery devices, normalised.
+
+        Cached: any config change reloads the entry and builds a new coordinator.
+        """
         raw = self._cfg().get(CONF_DEVICES) or []
         devices: list[dict[str, Any]] = []
         for entry in raw:
@@ -140,11 +147,12 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
             )
         return devices
 
+    @cached_property
+    def _devices_by_name(self) -> dict[str, dict[str, Any]]:
+        return {d[CONF_DEVICE_NAME]: d for d in self.configured_devices}
+
     def _device_config(self, name: str) -> dict[str, Any] | None:
-        for device in self.configured_devices:
-            if device[CONF_DEVICE_NAME] == name:
-                return device
-        return None
+        return self._devices_by_name.get(name)
 
     def _effective_device_wattage(
         self, name: str, scheduled: dict[str, Any]
@@ -451,6 +459,13 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         for i in range(anchor_idx):
             slots[i]["battery_prediction"] = None
 
+    @property
+    def current_slot(self) -> dict[str, Any] | None:
+        """The slot containing "now", as of the last refresh."""
+        idx = self.current_slot_index
+        slots = self.data or []
+        return slots[idx] if idx is not None and idx < len(slots) else None
+
     def _nowslot_idx(self, slots: list[dict]) -> int | None:
         """Return index of the slot that contains the current time."""
         if not slots:
@@ -493,7 +508,7 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         slots = self._build_slots()
 
         # Detect current-slot action change and fire event
-        idx = self._nowslot_idx(slots)
+        idx = self.current_slot_index = self._nowslot_idx(slots)
         if idx is not None:
             current_action = slots[idx]["action"]
             if self._last_action is None:
