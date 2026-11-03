@@ -10,6 +10,7 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.event import async_track_point_in_time, async_track_state_change_event
 from homeassistant.helpers.storage import Store
@@ -288,8 +289,12 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
     def _find_slot_start_str(self, time_str: str) -> str:
         """Return the raw start string from the price feed matching *time_str*.
 
-        Falls back to *time_str* as-is if no match is found.
+        Falls back to *time_str* as-is if no slot matches yet, so a slot can be
+        planned before its price is published. Raises if *time_str* is not a
+        timestamp at all, since that would only leave an orphaned entry behind.
         """
+        if parse_datetime(time_str) is None:
+            raise ServiceValidationError(f"Invalid slot time: {time_str!r}")
         cfg = self._cfg()
         price_entity_id = cfg.get(CONF_PRICE_ENTITY_ID, "")
         price_attribute = cfg.get(CONF_PRICE_ATTRIBUTE, "data")
@@ -565,6 +570,16 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         On/off devices need neither argument; mode devices pass *mode*; only
         'wattage' devices carry a per-slot power figure.
         """
+        device = self._device_config(device_name)
+        if device is None:
+            raise ServiceValidationError(f"Unknown device: {device_name!r}")
+        if mode is not None:
+            known_modes = [m["name"] for m in device[CONF_DEVICE_MODES]]
+            if mode not in known_modes:
+                raise ServiceValidationError(
+                    f"Unknown mode {mode!r} for {device_name!r}; "
+                    f"expected one of {known_modes}"
+                )
         key = self._find_slot_start_str(time_str)
         existing = self._planning.get(key, {})
         devices = dict(existing.get("devices") or {})
@@ -610,8 +625,9 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         start_dt = parse_datetime(start_str)
         end_dt = parse_datetime(end_str) if end_str else start_dt
         if start_dt is None or end_dt is None:
-            _LOGGER.error("Invalid time range for lock: %s – %s", start_str, end_str)
-            return
+            raise ServiceValidationError(
+                f"Invalid time range for lock: {start_str!r} – {end_str!r}"
+            )
 
         for slot in slots:
             ts = parse_datetime(slot["start"])
@@ -661,10 +677,9 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         start_dt = parse_datetime(start_time)
         stop_dt = parse_datetime(stop_time)
         if start_dt is None or stop_dt is None:
-            _LOGGER.error(
-                "Invalid start/stop for car charging: %s / %s", start_time, stop_time
+            raise ServiceValidationError(
+                f"Invalid start/stop for car charging: {start_time!r} / {stop_time!r}"
             )
-            return
 
         current_time = now()
         candidates = []

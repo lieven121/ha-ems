@@ -8,6 +8,7 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 
@@ -18,7 +19,6 @@ from .const import (
     ACTION_IDLE,
     ACTION_USE_NET,
     DOMAIN,
-    FIELD_CAR_USE_SOLAR,
     FIELD_CLEAR_LOCKED,
     FIELD_DEVICE_ID,
     FIELD_DEVICE_NAME,
@@ -148,27 +148,18 @@ _SERVICE_SCHEMAS: dict[str, vol.Schema] = {
 }
 
 
-def _get_coordinators(hass: HomeAssistant) -> list[EMSCoordinator]:
-    """Return all registered EMS coordinators."""
-    entries = hass.data.get(DOMAIN, {})
-    if not entries:
-        _LOGGER.error("No EMS coordinator found – is the integration loaded?")
-    return list(entries.values())
-
-
-def _get_coordinator_by_device(hass: HomeAssistant, device_id: str) -> "EMSCoordinator | None":
-    """Return the coordinator for the given device_id."""
-    device_reg = dr.async_get(hass)
-    device = device_reg.async_get(device_id)
+def _get_coordinator_by_device(hass: HomeAssistant, device_id: str) -> EMSCoordinator:
+    """Return the coordinator for the given device_id, or raise."""
+    device = dr.async_get(hass).async_get(device_id)
     if device is None:
-        _LOGGER.error("EMS: device %s not found", device_id)
-        return None
+        raise ServiceValidationError(f"EMS device {device_id!r} not found")
     for entry_id in device.config_entries:
         coord = hass.data.get(DOMAIN, {}).get(entry_id)
         if coord is not None:
             return coord
-    _LOGGER.error("EMS: no coordinator found for device %s", device_id)
-    return None
+    raise ServiceValidationError(
+        f"Device {device_id!r} is not a loaded EMS instance"
+    )
 
 
 async def async_register_services(hass: HomeAssistant) -> None:
@@ -176,8 +167,6 @@ async def async_register_services(hass: HomeAssistant) -> None:
 
     async def handle_planning_idle(call: ServiceCall) -> None:
         coord = _get_coordinator_by_device(hass, call.data[FIELD_DEVICE_ID])
-        if coord is None:
-            return
         await coord.async_set_planning(
             time_str=call.data[FIELD_TIME],
             action=ACTION_IDLE,
@@ -190,8 +179,6 @@ async def async_register_services(hass: HomeAssistant) -> None:
         if FIELD_UNTIL_PCT in call.data:
             action_config["until_pct"] = call.data[FIELD_UNTIL_PCT]
         coord = _get_coordinator_by_device(hass, call.data[FIELD_DEVICE_ID])
-        if coord is None:
-            return
         await coord.async_set_planning(
             time_str=call.data[FIELD_TIME],
             action=ACTION_CHARGE,
@@ -204,8 +191,6 @@ async def async_register_services(hass: HomeAssistant) -> None:
         if FIELD_UNTIL_PCT in call.data:
             action_config["until_pct"] = call.data[FIELD_UNTIL_PCT]
         coord = _get_coordinator_by_device(hass, call.data[FIELD_DEVICE_ID])
-        if coord is None:
-            return
         await coord.async_set_planning(
             time_str=call.data[FIELD_TIME],
             action=ACTION_DISCHARGE,
@@ -220,8 +205,6 @@ async def async_register_services(hass: HomeAssistant) -> None:
         if FIELD_MAX_WATTAGE in call.data:
             action_config["max_wattage"] = call.data[FIELD_MAX_WATTAGE]
         coord = _get_coordinator_by_device(hass, call.data[FIELD_DEVICE_ID])
-        if coord is None:
-            return
         await coord.async_set_planning(
             time_str=call.data[FIELD_TIME],
             action=ACTION_USE_NET,
@@ -231,8 +214,6 @@ async def async_register_services(hass: HomeAssistant) -> None:
 
     async def handle_planning_car_charge_slot(call: ServiceCall) -> None:
         coord = _get_coordinator_by_device(hass, call.data[FIELD_DEVICE_ID])
-        if coord is None:
-            return
         action_config: dict[str, Any] = {
             "use_solar": call.data.get(FIELD_USE_SOLAR, True),
         }
@@ -251,8 +232,6 @@ async def async_register_services(hass: HomeAssistant) -> None:
 
     async def handle_planning_charge_car(call: ServiceCall) -> None:
         coord = _get_coordinator_by_device(hass, call.data[FIELD_DEVICE_ID])
-        if coord is None:
-            return
         await coord.async_charge_car(
             start_time=call.data[FIELD_START_TIME],
             stop_time=call.data[FIELD_STOP_TIME],
@@ -266,8 +245,6 @@ async def async_register_services(hass: HomeAssistant) -> None:
 
     async def handle_planning_lock(call: ServiceCall) -> None:
         coord = _get_coordinator_by_device(hass, call.data[FIELD_DEVICE_ID])
-        if coord is None:
-            return
         await coord.async_lock_range(
             start_str=call.data[FIELD_START],
             end_str=call.data.get(FIELD_END),
@@ -276,22 +253,16 @@ async def async_register_services(hass: HomeAssistant) -> None:
 
     async def handle_planning_clear(call: ServiceCall) -> None:
         coord = _get_coordinator_by_device(hass, call.data[FIELD_DEVICE_ID])
-        if coord is None:
-            return
         await coord.async_clear(
             clear_locked=call.data.get(FIELD_CLEAR_LOCKED, False),
         )
 
     async def handle_planning_optimize(call: ServiceCall) -> None:
         coord = _get_coordinator_by_device(hass, call.data[FIELD_DEVICE_ID])
-        if coord is None:
-            return
         await coord.async_optimize()
 
     async def handle_planning_device_slot(call: ServiceCall) -> None:
         coord = _get_coordinator_by_device(hass, call.data[FIELD_DEVICE_ID])
-        if coord is None:
-            return
         await coord.async_set_device_slot(
             time_str=call.data[FIELD_TIME],
             device_name=call.data[FIELD_DEVICE_NAME],
@@ -301,8 +272,6 @@ async def async_register_services(hass: HomeAssistant) -> None:
 
     async def handle_planning_device_clear(call: ServiceCall) -> None:
         coord = _get_coordinator_by_device(hass, call.data[FIELD_DEVICE_ID])
-        if coord is None:
-            return
         await coord.async_clear_device_slot(
             time_str=call.data[FIELD_TIME],
             device_name=call.data[FIELD_DEVICE_NAME],
