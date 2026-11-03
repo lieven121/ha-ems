@@ -158,7 +158,9 @@ _SERVICE_SCHEMAS: dict[str, vol.Schema] = {
                         {
                             vol.Required(FIELD_TIME): cv.string,
                             vol.Optional(FIELD_ACTION): vol.In(ACTIONS),
-                            vol.Optional(FIELD_LOCKED, default=False): cv.boolean,
+                            # No default: leaving it out keeps the slot's lock
+                            # unless an action is given (then it means False).
+                            vol.Optional(FIELD_LOCKED): cv.boolean,
                             vol.Optional(FIELD_WATTAGE): vol.Coerce(float),
                             vol.Optional(FIELD_UNTIL_PCT): vol.Coerce(float),
                             vol.Optional(FIELD_MAX_WATTAGE): vol.Coerce(float),
@@ -255,7 +257,7 @@ def async_register_services(hass: HomeAssistant) -> None:
                 {
                     "time": item[FIELD_TIME],
                     "action": item.get(FIELD_ACTION),
-                    "locked": item.get(FIELD_LOCKED, False),
+                    "locked": item.get(FIELD_LOCKED),
                     "action_config": (
                         build_action_config(item[FIELD_ACTION], item)
                         if FIELD_ACTION in item

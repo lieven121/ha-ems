@@ -786,9 +786,10 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
     async def async_apply_bulk(self, items: list[dict[str, Any]]) -> None:
         """Apply many slot edits with a single save and a single refresh.
 
-        Each item: {time, action|None, locked, action_config|None, devices},
+        Each item: {time, action|None, locked|None, action_config|None, devices},
         where devices maps a device name to {wattage?, mode?} to schedule it,
-        or to None to unschedule it. Everything is validated before anything
+        or to None to unschedule it. An item with *locked* but no action only
+        locks or unlocks the slot. Everything is validated before anything
         changes, so a bad item leaves the plan untouched.
         """
         resolved: list[tuple[str, dict[str, Any]]] = []
@@ -802,8 +803,10 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
             entry = self._slot_entry(key)
             if item.get("action") is not None:
                 entry["action"] = item["action"]
-                entry["locked"] = bool(item.get("locked", False))
+                entry["locked"] = bool(item.get("locked") or False)
                 entry["action_config"] = item.get("action_config") or {}
+            elif item.get("locked") is not None:
+                entry["locked"] = bool(item["locked"])
             for name, dev in (item.get("devices") or {}).items():
                 if dev is None:
                     entry["devices"].pop(name, None)

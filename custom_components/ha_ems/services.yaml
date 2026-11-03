@@ -423,7 +423,8 @@ planning_bulk:
         `wattage`, `until_pct`, `max_wattage`, `use_solar`, `use_net_wattage`,
         `use_battery_wattage`, `use_battery_until_pct`, and `devices`, a map of
         device name to `{wattage, mode}` to schedule it or `null` to unschedule it.
-        Leaving out `action` keeps the slot's battery action unchanged.
+        Leaving out `action` keeps the slot's battery action unchanged; an entry
+        with only `time` and `locked` just locks or unlocks the slot.
       required: true
       example: >-
         [{"time": "2026-11-03T14:00:00+01:00", "action": "charge", "wattage": 3000,
