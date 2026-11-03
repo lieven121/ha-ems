@@ -465,7 +465,11 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         idx = self._nowslot_idx(slots)
         if idx is not None:
             current_action = slots[idx]["action"]
-            if current_action != self._last_action:
+            if self._last_action is None:
+                # First refresh after startup/reload: nothing actually changed,
+                # so seed the state without waking up automations.
+                self._last_action = current_action
+            elif current_action != self._last_action:
                 prev = self._last_action
                 self._last_action = current_action
                 self.hass.bus.async_fire(
