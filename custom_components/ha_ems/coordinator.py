@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 
 from datetime import datetime, timedelta
 from typing import Any
@@ -358,10 +359,15 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
             if raw_start is None:
                 continue
             start_str = str(raw_start)
+            # A missing price (e.g. tomorrow's prices not yet published) must
+            # not be read as 0, or the optimiser would treat the slot as free
+            # and charge there. Leave such slots out of the plan entirely.
             try:
-                price = float(entry.get(price_key, 0))
+                price = float(entry.get(price_key))
             except (TypeError, ValueError):
-                price = 0.0
+                continue
+            if not math.isfinite(price):
+                continue
 
             slot: dict[str, Any] = {"start": start_str, "price": price}
 
