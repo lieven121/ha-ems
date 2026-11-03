@@ -59,6 +59,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: EMSConfigEntry) -> bool:
     # (covers the case where it isn't available yet at startup)
     coordinator.async_start_price_tracking()
 
+    # Learn the house-load profile from the Energy dashboard's meters.
+    coordinator.async_start_load_learning()
+
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     return True

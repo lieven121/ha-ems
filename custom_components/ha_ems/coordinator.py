@@ -6,17 +6,21 @@ import logging
 import math
 from dataclasses import replace
 from datetime import datetime, timedelta
-from functools import cached_property
+from functools import cached_property, partial
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.helpers.event import async_track_point_in_time, async_track_state_change_event
+from homeassistant.helpers.event import (
+    async_track_point_in_time,
+    async_track_state_change_event,
+    async_track_time_change,
+)
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
-from homeassistant.util.dt import now, parse_datetime
+from homeassistant.util.dt import as_local, now, parse_datetime
 
 from .const import (
     ACTION_CAR_CHARGE,
@@ -45,15 +49,20 @@ from .const import (
     MAX_DEFAULT_WATTAGE,
     STORAGE_VERSION,
 )
+from .energy_series import resample_energy_to_slots
+from .forecast import EnergyDashboardSource
+from .load_profile import LoadProfile, bias_factor, build_profile, predict_load_w
 from .models import EMSSettings
 from .optimizer import OptimizerSlot, optimize
-from .simulation import step_soc
+from .simulation import one_way_efficiency, step_soc
 
 _LOGGER = logging.getLogger(__name__)
 
 _UPDATE_INTERVAL = timedelta(minutes=5)
 _SAVE_DELAY_S = 2
 _PLANNING_RETENTION = timedelta(hours=48)
+_PROFILE_HISTORY = timedelta(days=28)
+_BIAS_REFRESH = timedelta(minutes=30)
 
 
 class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
@@ -77,6 +86,13 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
 
         # Live-editable values (backed by number/switch entities)
         self.settings = EMSSettings()
+
+        # Solar forecast and learned house load, from the Energy dashboard.
+        self._energy = EnergyDashboardSource(hass)
+        self._solar_periods: dict[datetime, float] = {}
+        self.load_profile = LoadProfile()
+        self._load_bias = 1.0
+        self._bias_fetched: datetime | None = None
 
         self._last_action: str | None = None
         # Index into self.data of the slot containing "now", recomputed on
@@ -187,8 +203,76 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         return self._planning.get(start_str, {}).get("devices", {}) or {}
 
     def _slot_load_w(self, slot: dict) -> float:
-        """House load during *slot*: baseline plus any scheduled devices."""
-        return self.settings.avg_consumption + self._slot_device_wattage(slot)
+        """House load during *slot*: predicted baseline plus scheduled devices."""
+        base = slot.get("base_load_w", self.settings.avg_consumption)
+        return base + self._slot_device_wattage(slot)
+
+    @property
+    def max_charge_w(self) -> float:
+        """Charge/discharge power cap (inverter limit), from the kWp setting."""
+        return min(self.settings.kwp_w, MAX_DEFAULT_WATTAGE)
+
+    @property
+    def efficiency(self) -> float:
+        loss = self._cfg().get(CONF_ROUNDTRIP_LOSS_PCT, DEFAULT_ROUNDTRIP_LOSS_PCT)
+        return one_way_efficiency(float(loss))
+
+    @property
+    def load_source(self) -> str:
+        """Where the house-load forecast comes from: learned or average."""
+        return "average" if self.load_profile.empty else "learned"
+
+    def solar_energy_kwh(self, day_offset: int) -> float:
+        """Forecast PV energy for today (0) or tomorrow (1), in kWh."""
+        day = (now() + timedelta(days=day_offset)).date()
+        total = sum(
+            wh for ts, wh in self._solar_periods.items() if as_local(ts).date() == day
+        )
+        return round(total / 1000.0, 2)
+
+    # ------------------------------------------------------------------
+    # Forecasts: solar and learned house load
+    # ------------------------------------------------------------------
+
+    async def async_rebuild_load_profile(self, *_: Any) -> None:
+        """Re-learn the weekly house-load profile from the last four weeks."""
+        end = now().replace(minute=0, second=0, microsecond=0)
+        history = await self._energy.async_house_load_history(end - _PROFILE_HISTORY, end)
+        if not history:
+            _LOGGER.debug("No energy history; house load stays at the average")
+            return
+        self.load_profile = build_profile(history, end)
+        self._bias_fetched = None
+        _LOGGER.debug("Learned house-load profile from %d days", self.load_profile.days)
+        self._async_save_planning()
+        await self.async_refresh()
+
+    @callback
+    def async_start_load_learning(self) -> None:
+        """Learn the profile now (in the background) and every night at 00:10."""
+        self.config_entry.async_create_background_task(
+            self.hass, self.async_rebuild_load_profile(), "ha_ems_load_profile"
+        )
+        self.config_entry.async_on_unload(
+            async_track_time_change(
+                self.hass, self.async_rebuild_load_profile, hour=0, minute=10, second=0
+            )
+        )
+
+    async def _async_update_forecasts(self) -> None:
+        """Fetch the solar forecast (cached) and refresh the short-term load bias."""
+        self._solar_periods = await self._energy.async_solar_forecast()
+        if self.load_profile.empty:
+            return
+        current = now()
+        if self._bias_fetched and current - self._bias_fetched < _BIAS_REFRESH:
+            return
+        self._bias_fetched = current
+        hour = current.replace(minute=0, second=0, microsecond=0)
+        recent = await self._energy.async_house_load_history(hour - timedelta(hours=4), hour)
+        self._load_bias = bias_factor(
+            self.load_profile, recent, current, self.settings.avg_consumption
+        )
 
     def _slot_device_wattage(self, slot: dict) -> float:
         """Total draw in watts of every device scheduled in *slot*."""
@@ -222,6 +306,7 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         stored = await self._store.async_load()
         if stored and isinstance(stored, dict):
             self._planning = stored.get("planning", {})
+            self.load_profile = LoadProfile.from_dict(stored.get("profile"))
             _LOGGER.debug(
                 "Loaded %d planning overrides from storage", len(self._planning)
             )
@@ -232,9 +317,10 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
 
         Store flushes pending delayed writes on shutdown, so nothing is lost.
         """
-        self._store.async_delay_save(
-            lambda: {"planning": self._planning}, _SAVE_DELAY_S
-        )
+        self._store.async_delay_save(self._stored_data, _SAVE_DELAY_S)
+
+    def _stored_data(self) -> dict[str, Any]:
+        return {"planning": self._planning, "profile": self.load_profile.as_dict()}
 
     def async_start_price_tracking(self) -> None:
         """Track the price entity so we refresh as soon as it becomes available.
@@ -412,6 +498,8 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
             slot["battery_prediction"] = None
             slots.append(slot)
 
+        self._add_forecasts(slots, slot_duration_h, current_time)
+
         # Battery simulation
         if battery_size_kwh and battery_size_kwh > 0:
             current_soc = self._get_current_soc()
@@ -421,6 +509,31 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 )
 
         return slots
+
+    def _add_forecasts(
+        self, slots: list[dict[str, Any]], slot_duration_h: float, current_time: datetime
+    ) -> None:
+        """Add solar_w, base_load_w and load_w (house + devices) to every slot."""
+        starts = [parse_datetime(slot["start"]) for slot in slots]
+        valid = [ts for ts in starts if ts is not None]
+        solar = iter(resample_energy_to_slots(self._solar_periods, valid, slot_duration_h))
+        base = iter(
+            predict_load_w(
+                self.load_profile,
+                [as_local(ts) for ts in valid],
+                as_local(current_time),
+                self.settings.avg_consumption,
+                self._load_bias,
+            )
+        )
+        for slot, ts in zip(slots, starts, strict=True):
+            if ts is None:
+                slot["solar_w"] = 0.0
+                slot["base_load_w"] = self.settings.avg_consumption
+            else:
+                slot["solar_w"] = round(next(solar), 1)
+                slot["base_load_w"] = round(next(base), 1)
+            slot["load_w"] = round(self._slot_load_w(slot), 1)
 
     def _simulate_battery(
         self,
@@ -448,9 +561,12 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 soc,
                 slot["action"],
                 slot.get("action_config") or {},
-                self._slot_load_w(slot),
+                slot["load_w"],
                 slot_duration_h,
                 battery_size_kwh,
+                solar_w=slot["solar_w"],
+                max_charge_w=self.max_charge_w,
+                efficiency=self.efficiency,
             )
             slot["battery_prediction"] = round(soc, 1)
 
@@ -504,6 +620,7 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
 
     async def _async_update_data(self) -> list[dict[str, Any]]:
         self._prune_planning()
+        await self._async_update_forecasts()
         slots = self._build_slots()
 
         # Detect current-slot action change and fire event
@@ -549,7 +666,7 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         self._cancel_slot_timer()
         # Flush any debounced write now, so a reload that loads the store
         # straight away doesn't read stale planning.
-        await self._store.async_save({"planning": self._planning})
+        await self._store.async_save(self._stored_data())
         await super().async_shutdown()
 
     def _schedule_next_slot_refresh(self, slots: list[dict]) -> None:
@@ -838,25 +955,29 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 OptimizerSlot(
                     key=slot["start"],
                     price=slot["price"],
-                    load_w=self._slot_load_w(slot),
+                    load_w=slot["load_w"],
+                    solar_w=slot["solar_w"],
+                    injection_price=slot.get("injection_price"),
                     fixed_action=existing.get("action", ACTION_IDLE) if fixed else None,
                     fixed_config=dict(existing.get("action_config") or {}) if fixed else {},
                 )
             )
 
-        plan = optimize(
-            opt_slots,
-            settings=self.settings,
-            current_soc=current_soc,
-            slot_hours=slot_duration_h,
-            battery_kwh=battery_kwh,
-            # Cap charge wattage at the configured kWp (inverter/solar limit)
-            charge_wattage=(
-                min(self.settings.kwp_w, MAX_DEFAULT_WATTAGE) if battery_kwh else 0.0
-            ),
-            roundtrip_loss_pct=float(
-                cfg.get(CONF_ROUNDTRIP_LOSS_PCT, DEFAULT_ROUNDTRIP_LOSS_PCT)
-            ),
+        # A few hundred thousand transitions: keep them off the event loop.
+        plan = await self.hass.async_add_executor_job(
+            partial(
+                optimize,
+                opt_slots,
+                settings=self.settings,
+                current_soc=current_soc,
+                slot_hours=slot_duration_h,
+                battery_kwh=battery_kwh,
+                # Charge/discharge at the inverter limit (the kWp setting).
+                charge_wattage=self.max_charge_w if battery_kwh else 0.0,
+                roundtrip_loss_pct=float(
+                    cfg.get(CONF_ROUNDTRIP_LOSS_PCT, DEFAULT_ROUNDTRIP_LOSS_PCT)
+                ),
+            )
         )
 
         for key, (action, action_config) in plan.items():
