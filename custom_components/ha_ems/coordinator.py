@@ -51,6 +51,8 @@ from .const import (
     STORAGE_VERSION,
 )
 
+from .simulation import step_soc
+
 _LOGGER = logging.getLogger(__name__)
 
 _UPDATE_INTERVAL = timedelta(minutes=5)
@@ -184,19 +186,9 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         """Return the devices scheduled for the slot starting at *start_str*."""
         return self._planning.get(start_str, {}).get("devices", {}) or {}
 
-    @staticmethod
-    def _car_battery_budget_w(action_config: dict) -> float:
-        """Battery budget for a car-charge slot, in watts.
-
-        Positive: the car may draw this much from the house battery.
-        Negative: charge the house battery at this rate while the car charges,
-        which is what you want when the cheap hours have to serve both.
-        Zero: grid/solar only, the battery is not involved.
-        """
-        try:
-            return float(action_config.get("use_battery_wattage", 0) or 0)
-        except (TypeError, ValueError):
-            return 0.0
+    def _slot_load_w(self, slot: dict) -> float:
+        """House load during *slot*: baseline plus any scheduled devices."""
+        return self._avg_consumption + self._slot_device_wattage(slot)
 
     def _slot_device_wattage(self, slot: dict) -> float:
         """Total draw in watts of every device scheduled in *slot*."""
@@ -418,14 +410,6 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         current_time: datetime,
     ) -> None:
         """Fill battery_prediction for slots starting from the current one forward."""
-
-        def clamp(v: float) -> float:
-            return max(0.0, min(100.0, v))
-
-        def pct(watts: float) -> float:
-            """Convert a sustained draw over one slot into a SoC percentage."""
-            return (watts * slot_duration_h) / (battery_size_kwh * 1000) * 100
-
         # Find current slot index
         current_idx = None
         for i, slot in enumerate(slots):
@@ -439,36 +423,14 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         soc = current_soc
         for i in range(anchor_idx, len(slots)):
             slot = slots[i]
-            action = slot["action"]
-            cfg = slot.get("action_config", {})
-            wattage = float(cfg.get("wattage", 0))
-
-            # Scheduled devices (heat pump, boiler, ...) are extra load on top of
-            # baseline consumption, so the drain is computed per slot.
-            load_w = self._avg_consumption + self._slot_device_wattage(slot)
-            drain_pct = pct(load_w)
-
-            if action == ACTION_CHARGE:
-                soc = clamp(soc + pct(wattage) - drain_pct)
-            elif action == ACTION_DISCHARGE:
-                soc = clamp(soc - pct(wattage) - drain_pct)
-            elif action == ACTION_USE_NET:
-                # Using grid directly — but if max_wattage is capped below the
-                # slot load, the deficit must come from battery
-                max_w = float(cfg.get("max_wattage", 0))
-                if max_w > 0 and max_w < load_w:
-                    soc = clamp(soc - pct(load_w - max_w))
-            elif action == ACTION_CAR_CHARGE:
-                budget_w = self._car_battery_budget_w(cfg)
-                if budget_w > 0:
-                    soc = clamp(soc - pct(budget_w))
-                elif budget_w < 0:
-                    soc = clamp(soc + pct(-budget_w))
-                # 0: grid/solar only, the battery is not involved
-            else:
-                # idle: home consumption comes from battery
-                soc = clamp(soc - drain_pct)
-
+            soc = step_soc(
+                soc,
+                slot["action"],
+                slot.get("action_config") or {},
+                self._slot_load_w(slot),
+                slot_duration_h,
+                battery_size_kwh,
+            )
             slot["battery_prediction"] = round(soc, 1)
 
         # Past slots get no prediction
@@ -760,37 +722,21 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         slot_duration_h = self._slot_duration_from_slots(slots)
         current_time = now()
 
-        def clamp(v: float) -> float:
-            return max(0.0, min(100.0, v))
+        has_battery = bool(battery_size_kwh and battery_size_kwh > 0)
+        battery_kwh = float(battery_size_kwh) if has_battery else 0.0
+        # Cap charge wattage at the configured kWp (inverter/solar limit)
+        default_wattage = min(self._kwp, MAX_DEFAULT_WATTAGE) if has_battery else 0.0
 
-        # Pre-compute energy percentages per slot
-        charge_pct: float = 0.0
-        default_wattage: float = 0.0
-
-        if battery_size_kwh and battery_size_kwh > 0:
-            # Cap charge wattage at the configured kWp (inverter/solar limit)
-            default_wattage = min(self._kwp, MAX_DEFAULT_WATTAGE)
-            charge_pct = (
-                default_wattage * slot_duration_h / (battery_size_kwh * 1000) * 100
+        def step(soc: float, slot: dict, action: str, action_config: dict) -> float:
+            return step_soc(
+                soc,
+                action,
+                action_config,
+                self._slot_load_w(slot),
+                slot_duration_h,
+                battery_kwh,
+                default_wattage,
             )
-
-        def slot_drain_pct(slot: dict) -> float:
-            """Drain for one slot, including any devices scheduled in it."""
-            if not battery_size_kwh or battery_size_kwh <= 0:
-                return 0.0
-            load_w = self._avg_consumption + self._slot_device_wattage(slot)
-            return load_w * slot_duration_h / (battery_size_kwh * 1000) * 100
-
-        def car_soc_delta_pct(action_config: dict) -> float:
-            """SoC change over a car-charge slot, from its battery budget.
-
-            Without this the optimiser reads every car slot as a plain drain and
-            inserts charge slots that a negative budget already covers.
-            """
-            if not battery_size_kwh or battery_size_kwh <= 0:
-                return 0.0
-            budget_w = self._car_battery_budget_w(action_config)
-            return -budget_w * slot_duration_h / (battery_size_kwh * 1000) * 100
 
         current_soc = self._get_current_soc()
         if current_soc is None:
@@ -813,11 +759,13 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         # their existing action. Find SoC breaches and insert charges greedily.
 
         assignments: dict[str, str] = {}
+        fixed_keys: set[str] = set()
         for slot in future_slots:
             key = slot["start"]
             existing = self._planning.get(key, {})
             if existing.get("locked") or existing.get("action") == ACTION_CAR_CHARGE:
                 assignments[key] = existing.get("action", ACTION_IDLE)
+                fixed_keys.add(key)
             else:
                 assignments[key] = ACTION_IDLE
 
@@ -828,26 +776,16 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
             for slot in future_slots:
                 key = slot["start"]
                 action = assignments[key]
-                slot_drain = slot_drain_pct(slot)
-                if action == ACTION_CHARGE and battery_size_kwh:
-                    soc = clamp(soc + charge_pct - slot_drain)
-                elif action == ACTION_DISCHARGE and battery_size_kwh:
-                    soc = clamp(soc - charge_pct - slot_drain)
-                elif action == ACTION_USE_NET:
-                    pass
-                elif action == ACTION_CAR_CHARGE and battery_size_kwh:
-                    soc = clamp(
-                        soc
-                        + car_soc_delta_pct(
-                            self._planning.get(key, {}).get("action_config") or {}
-                        )
-                    )
-                elif battery_size_kwh:
-                    soc = clamp(soc - slot_drain)
+                if key in fixed_keys:
+                    # Locked/car slots keep their real config (wattage, budget, ...)
+                    action_config = self._planning.get(key, {}).get("action_config") or {}
+                else:
+                    action_config = {}
+                soc = step(soc, slot, action, action_config)
                 result.append((key, soc))
             return result
 
-        if battery_size_kwh and battery_size_kwh > 0 and charge_pct > 0:
+        if has_battery and default_wattage > 0:
             # Iterate: fix one breach per iteration to avoid infinite loops
             for _ in range(len(future_slots)):
                 trajectory = simulate_trajectory()
@@ -868,8 +806,7 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                     s
                     for s in future_slots
                     if assignments[s["start"]] == ACTION_IDLE
-                    and not self._planning.get(s["start"], {}).get("locked")
-                    and self._planning.get(s["start"], {}).get("action") != ACTION_CAR_CHARGE
+                    and s["start"] not in fixed_keys
                     and (parse_datetime(s["start"]) or current_time) <= (breach_dt or current_time)
                 ]
                 if not candidates:
@@ -911,7 +848,7 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                         action = ACTION_IDLE
                         action_config = {}
                     else:
-                        predicted_soc_after = clamp(soc + charge_pct - slot_drain_pct(slot))
+                        predicted_soc_after = step(soc, slot, ACTION_CHARGE, {})
                         action = ACTION_CHARGE
                         action_config = {
                             "wattage": default_wattage,
@@ -925,8 +862,7 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 elif self._allow_idle_for_optimize:
                     # Price is above effective cost → let battery power the home
                     if self._allow_discharge:
-                        drop = charge_pct
-                        if soc - drop - slot_drain_pct(slot) >= self._min_battery:
+                        if step(soc, slot, ACTION_DISCHARGE, {}) >= self._min_battery:
                             action = ACTION_DISCHARGE
                             action_config = {"wattage": default_wattage}
                         else:
@@ -950,18 +886,7 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 }
 
             # Advance SoC simulation
-            if battery_size_kwh and battery_size_kwh > 0:
-                slot_drain = slot_drain_pct(slot)
-                if action == ACTION_CHARGE:
-                    soc = clamp(soc + charge_pct - slot_drain)
-                elif action == ACTION_DISCHARGE:
-                    soc = clamp(soc - charge_pct - slot_drain)
-                elif action == ACTION_USE_NET:
-                    pass
-                elif action == ACTION_CAR_CHARGE:
-                    soc = clamp(soc + car_soc_delta_pct(action_config))
-                else:
-                    soc = clamp(soc - slot_drain)
+            soc = step(soc, slot, action, action_config)
 
         await self._async_save_planning()
         await self.async_refresh()
