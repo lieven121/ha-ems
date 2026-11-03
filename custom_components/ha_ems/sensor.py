@@ -39,6 +39,9 @@ class EMSPlanningSensor(CoordinatorEntity[EMSCoordinator], SensorEntity):
     """Sensor whose state is the current slot action and whose attribute holds the full plan."""
 
     _attr_icon = "mdi:calendar-clock"
+    # The full plan is far beyond the recorder's 16 KB attribute limit and is
+    # only useful live (for the card), so keep it out of history.
+    _unrecorded_attributes = frozenset({"planning", "devices_available"})
 
     def __init__(
         self, coordinator: EMSCoordinator, config_entry: ConfigEntry
