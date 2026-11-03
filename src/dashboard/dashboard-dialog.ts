@@ -210,8 +210,8 @@ export function renderPopup(ctx: DialogContext): void {
         </div>
       </div>
       <div class="action-locked-row">
-        <input type="checkbox" id="action-locked" ${slot.locked ? 'checked' : ''}>
-        <span class="action-locked-label">Locked (prevent auto-replanning)</span>
+        <input type="checkbox" id="action-locked" checked>
+        <span class="action-locked-label">Lock (keep the optimizer off this slot)</span>
       </div>
       <div class="action-btn-row">
         <button class="action-apply-btn" id="action-apply">Apply</button>

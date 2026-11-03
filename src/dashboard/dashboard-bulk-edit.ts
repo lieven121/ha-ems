@@ -126,6 +126,10 @@ export function renderBulkEdit(ctx: BulkEditContext): void {
     const applyBtn = sr.getElementById('be-apply') as HTMLButtonElement;
     applyBtn.textContent = `Apply to ${matched.length} slot${matched.length !== 1 ? 's' : ''}`;
     applyBtn.disabled = matched.length === 0;
+    for (const id of ['be-lock', 'be-unlock']) {
+      const btn = sr.getElementById(id) as HTMLButtonElement | null;
+      if (btn) btn.disabled = matched.length === 0;
+    }
   }
 
   // ── Shell: rendered once ─────────────────────────────────────────────────
@@ -293,8 +297,16 @@ export function renderBulkEdit(ctx: BulkEditContext): void {
 
     ${devicesHtml}
 
+    <div class="action-locked-row be-locked-row">
+      <input type="checkbox" id="be-locked" checked>
+      <span class="action-locked-label">Lock edited slots (keep the optimizer off them)</span>
+    </div>
     <div class="be-apply-row">
       <button class="be-apply-btn" id="be-apply"></button>
+    </div>
+    <div class="be-apply-row be-lock-row">
+      <button class="be-lock-btn" id="be-lock" title="Lock the matched slots without changing them">🔒 Lock</button>
+      <button class="be-lock-btn" id="be-unlock" title="Unlock the matched slots so the optimizer may re-plan them">🔓 Unlock</button>
     </div>
   `;
 
@@ -468,7 +480,7 @@ export function renderBulkEdit(ctx: BulkEditContext): void {
   });
 
   // Prevent input clicks from closing the overlay
-  sr.querySelectorAll('.be-action-section .param-input, .be-time-input, .be-filter-input').forEach(el => {
+  sr.querySelectorAll('.be-action-section .param-input, .be-time-input, .be-filter-input, #be-locked').forEach(el => {
     el.addEventListener('click', (e: Event) => e.stopPropagation());
   });
 
@@ -534,9 +546,10 @@ export function renderBulkEdit(ctx: BulkEditContext): void {
         }
       }
 
+      const lockEdited = (sr.getElementById('be-locked') as HTMLInputElement | null)?.checked ?? true;
       const items = matched.map(idx => {
         const slot = slots[idx];
-        return { time: slot.start ?? slot.time, locked: true, ...actionFields, devices };
+        return { time: slot.start ?? slot.time, locked: lockEdited, ...actionFields, devices };
       });
 
       // One call: one save and one refresh on the backend, however many slots.
@@ -555,6 +568,33 @@ export function renderBulkEdit(ctx: BulkEditContext): void {
       console.error('Bulk edit error:', err);
     }
   });
+
+  // Lock / unlock only: the slots keep their action and devices.
+  const setLock = async (btn: HTMLButtonElement, locked: boolean) => {
+    const matched = getMatchedIndices();
+    if (matched.length === 0) return;
+    const label = btn.textContent;
+    btn.disabled = true;
+    try {
+      await hass.callService('ha_ems', 'planning_bulk', {
+        device_id: deviceId || entryId,
+        slots: matched.map(idx => ({ time: slots[idx].start ?? slots[idx].time, locked })),
+      });
+      btn.textContent = locked ? `✓ Locked ${matched.length}` : `✓ Unlocked ${matched.length}`;
+      setTimeout(() => {
+        ctx.onApplied();
+        ctx.onClose();
+      }, 800);
+    } catch (err: any) {
+      btn.textContent = '✕ Error';
+      btn.disabled = false;
+      console.error('Bulk lock error:', err, label);
+    }
+  };
+  for (const [id, locked] of [['be-lock', true], ['be-unlock', false]] as const) {
+    const btn = sr.getElementById(id) as HTMLButtonElement;
+    btn.addEventListener('click', (e: Event) => { e.stopPropagation(); setLock(btn, locked); });
+  }
 
   renderRangeUI();
 }

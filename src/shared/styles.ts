@@ -332,6 +332,11 @@ header[hidden]{display:none;}
 .be-apply-btn.success{background:#16a34a;}
 .be-apply-btn.error{background:#dc2626;}
 .be-apply-btn:disabled{opacity:.5;cursor:default;}
+.be-locked-row{margin:0;padding:10px 16px 0;}
+.be-lock-row{border-top:none;padding-top:0;}
+.be-lock-btn{flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:transparent;color:inherit;font-family:var(--code-font-family,monospace);font-size:11px;cursor:pointer;transition:background .12s;}
+.be-lock-btn:hover{background:rgba(127,127,127,.12);}
+.be-lock-btn:disabled{opacity:.5;cursor:default;}
 
 /* Light theme */
 .root.theme-light {
