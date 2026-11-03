@@ -37,7 +37,7 @@ class EMSNumberDescription(NumberEntityDescription):
 NUMBERS: tuple[EMSNumberDescription, ...] = (
     EMSNumberDescription(
         key=ENTITY_MIN_BATTERY,
-        name="EMS Min Battery",
+        translation_key=ENTITY_MIN_BATTERY,
         setting="min_battery",
         native_min_value=0.0,
         native_max_value=100.0,
@@ -48,7 +48,7 @@ NUMBERS: tuple[EMSNumberDescription, ...] = (
     ),
     EMSNumberDescription(
         key=ENTITY_MAX_BATTERY,
-        name="EMS Max Battery",
+        translation_key=ENTITY_MAX_BATTERY,
         setting="max_battery",
         native_min_value=0.0,
         native_max_value=100.0,
@@ -59,7 +59,7 @@ NUMBERS: tuple[EMSNumberDescription, ...] = (
     ),
     EMSNumberDescription(
         key=ENTITY_AVG_CONSUMPTION,
-        name="EMS Avg Consumption",
+        translation_key=ENTITY_AVG_CONSUMPTION,
         setting="avg_consumption",
         native_min_value=0.0,
         native_max_value=10000.0,
@@ -70,7 +70,7 @@ NUMBERS: tuple[EMSNumberDescription, ...] = (
     ),
     EMSNumberDescription(
         key=ENTITY_KWP,
-        name="EMS kWp",
+        translation_key=ENTITY_KWP,
         setting="kwp_w",
         scale=1000.0,
         precision=3,
@@ -99,6 +99,7 @@ async def async_setup_entry(
 class EMSSettingNumber(CoordinatorEntity[EMSCoordinator], NumberEntity, RestoreEntity):
     """Edit one planning setting; the value survives restarts."""
 
+    _attr_has_entity_name = True
     entity_description: EMSNumberDescription
 
     def __init__(

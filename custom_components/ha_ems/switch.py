@@ -26,7 +26,7 @@ SWITCHES: tuple[EMSSwitchDescription, ...] = (
     # Whether the optimiser may assign discharge actions.
     EMSSwitchDescription(
         key=ENTITY_ALLOW_DISCHARGE,
-        name="EMS Allow Discharge",
+        translation_key=ENTITY_ALLOW_DISCHARGE,
         setting="allow_discharge",
         icon="mdi:battery-arrow-down",
     ),
@@ -36,7 +36,7 @@ SWITCHES: tuple[EMSSwitchDescription, ...] = (
     #   OFF: every non-charge slot -> use_net (preserve the battery).
     EMSSwitchDescription(
         key=ENTITY_ALLOW_IDLE_FOR_OPTIMIZE,
-        name="EMS Allow Idle (Optimizer)",
+        translation_key=ENTITY_ALLOW_IDLE_FOR_OPTIMIZE,
         setting="allow_idle_for_optimize",
         icon="mdi:battery-clock",
     ),
@@ -58,6 +58,7 @@ async def async_setup_entry(
 class EMSSettingSwitch(CoordinatorEntity[EMSCoordinator], SwitchEntity, RestoreEntity):
     """Toggle one optimiser setting; the value survives restarts."""
 
+    _attr_has_entity_name = True
     entity_description: EMSSwitchDescription
 
     def __init__(

@@ -37,6 +37,7 @@ async def async_setup_entry(
 class EMSPlanningSensor(CoordinatorEntity[EMSCoordinator], SensorEntity):
     """Sensor whose state is the current slot action and whose attribute holds the full plan."""
 
+    _attr_has_entity_name = True
     _attr_icon = "mdi:calendar-clock"
     # The full plan is far beyond the recorder's 16 KB attribute limit and is
     # only useful live (for the card), so keep it out of history.
@@ -47,7 +48,7 @@ class EMSPlanningSensor(CoordinatorEntity[EMSCoordinator], SensorEntity):
     ) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{config_entry.entry_id}_{ENTITY_PLANNING}"
-        self._attr_name = "EMS Planning"
+        self._attr_translation_key = ENTITY_PLANNING
         self._attr_device_info = coordinator.device_info
 
     @property
@@ -79,6 +80,7 @@ class EMSPlanningSensor(CoordinatorEntity[EMSCoordinator], SensorEntity):
 class EMSCurrentActionSensor(CoordinatorEntity[EMSCoordinator], SensorEntity):
     """Sensor whose state is the human-readable label of the current slot action."""
 
+    _attr_has_entity_name = True
     _attr_icon = "mdi:lightning-bolt"
 
     def __init__(
@@ -86,7 +88,7 @@ class EMSCurrentActionSensor(CoordinatorEntity[EMSCoordinator], SensorEntity):
     ) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{config_entry.entry_id}_{ENTITY_CURRENT_ACTION}"
-        self._attr_name = "EMS Current Action"
+        self._attr_translation_key = ENTITY_CURRENT_ACTION
         self._attr_device_info = coordinator.device_info
 
     def _current_slot(self) -> dict | None:

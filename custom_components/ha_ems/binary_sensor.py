@@ -64,6 +64,7 @@ def _remove_stale_device_entities(
 class EMSDeviceSensor(CoordinatorEntity[EMSCoordinator], BinarySensorEntity):
     """On while the current slot schedules this device."""
 
+    _attr_has_entity_name = True
     _attr_icon = "mdi:power-plug"
 
     def __init__(
@@ -80,7 +81,8 @@ class EMSDeviceSensor(CoordinatorEntity[EMSCoordinator], BinarySensorEntity):
         self._attr_unique_id = (
             f"{config_entry.entry_id}_{ENTITY_DEVICE_PREFIX}_{slugify(self._device_name)}"
         )
-        self._attr_name = f"EMS {self._device_name}"
+        # Prefixed with the EMS device name, e.g. "EMS Boiler".
+        self._attr_name = self._device_name
         self._attr_device_info = coordinator.device_info
 
     def _slot_entry(self, slot: dict | None) -> dict | None:

@@ -25,7 +25,7 @@ class EMSOptimizeButton(ButtonEntity):
     """Button that triggers the EMS optimizer."""
 
     _attr_has_entity_name = True
-    _attr_name = "Optimize"
+    _attr_translation_key = ENTITY_OPTIMIZE
     _attr_icon = "mdi:auto-fix"
 
     def __init__(self, coordinator: EMSCoordinator, entry: ConfigEntry) -> None:

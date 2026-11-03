@@ -145,26 +145,37 @@
   "entity": {
     "number": {
       "ems_min_battery": {
-        "name": "EMS Min Battery"
+        "name": "Min Battery"
       },
       "ems_max_battery": {
-        "name": "EMS Max Battery"
+        "name": "Max Battery"
       },
       "ems_avg_consumption": {
-        "name": "EMS Avg Consumption"
+        "name": "Avg Consumption"
+      },
+      "ems_kwp": {
+        "name": "kWp"
       }
     },
     "switch": {
       "ems_allow_discharge": {
-        "name": "EMS Allow Discharge"
+        "name": "Allow Discharge"
+      },
+      "ems_allow_idle_for_optimize": {
+        "name": "Allow Idle (Optimizer)"
       }
     },
     "sensor": {
       "ems_planning": {
-        "name": "EMS Planning"
+        "name": "Planning"
       },
       "ems_current_action": {
-        "name": "EMS Current Action"
+        "name": "Current Action"
+      }
+    },
+    "button": {
+      "ems_optimize": {
+        "name": "Optimize"
       }
     }
   },
