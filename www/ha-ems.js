@@ -1646,7 +1646,7 @@ function renderBulkEdit(ctx) {
     const matched = getMatchedIndices();
     if (matched.length === 0) return;
     applyBtn.disabled = true;
-    applyBtn.textContent = `Applying\u2026 (0/${matched.length})`;
+    applyBtn.textContent = `Applying to ${matched.length} slots\u2026`;
     const commonBase = { device_id: deviceId || entryId };
     const numVal = (id, fallback) => {
       const v = parseFloat(sr.getElementById(id)?.value);
@@ -1657,65 +1657,50 @@ function renderBulkEdit(ctx) {
       return v !== "" && v != null ? parseFloat(v) : null;
     };
     try {
-      for (let mi = 0; mi < matched.length; mi++) {
-        const slot = slots[matched[mi]];
-        const slotTime = slot.start ?? slot.time;
-        const commonData = { ...commonBase, time: slotTime, locked: true };
-        if (selAction === "idle") {
-          await hass.callService("ha_ems", "planning_idle", commonData);
-        } else if (selAction === "charge") {
-          const untilPct = optNumVal("be-charge-until");
-          await hass.callService(
-            "ha_ems",
-            "planning_charge",
-            { ...commonData, wattage: numVal("be-charge-w", kwpW), ...untilPct != null ? { until_pct: untilPct } : {} }
-          );
-        } else if (selAction === "discharge") {
-          const untilPct = optNumVal("be-discharge-until");
-          await hass.callService(
-            "ha_ems",
-            "planning_discharge",
-            { ...commonData, wattage: numVal("be-discharge-w", kwpW), ...untilPct != null ? { until_pct: untilPct } : {} }
-          );
-        } else if (selAction === "use_net") {
-          const maxWatts = optNumVal("be-usenet-max");
-          const useSolar = sr.getElementById("be-usenet-solar")?.classList.contains("on") ?? true;
-          await hass.callService(
-            "ha_ems",
-            "planning_use_net",
-            { ...commonData, use_solar: useSolar, ...maxWatts != null ? { max_wattage: maxWatts } : {} }
-          );
-        } else if (selAction === "car_charge") {
-          const useSolar = sr.getElementById("be-car-solar")?.classList.contains("on") ?? true;
-          const netCardOn = sr.getElementById("be-wc-car-net")?.classList.contains("on") ?? false;
-          const batCardOn = sr.getElementById("be-wc-car-bat")?.classList.contains("on") ?? false;
-          const batUntil = batCardOn ? optNumVal("be-car-bat-until") : null;
-          await hass.callService("ha_ems", "planning_car_charge_slot", {
-            ...commonData,
-            use_solar: useSolar,
-            use_net_wattage: netCardOn ? numVal("be-car-net-w", 0) : 0,
-            use_battery_wattage: batCardOn ? numVal("be-car-bat-w", 0) : 0,
-            ...batUntil != null ? { use_battery_until_pct: batUntil } : {}
-          });
-        }
-        for (const d of devicesAvailable) {
-          const intent = deviceIntents[d.name];
-          if (intent === "ignore") continue;
-          let params = {};
-          if (intent === "on" && d.control === "modes") {
-            const mode = deviceMode[d.name];
-            if (mode) params = { mode };
-          } else if (intent === "on" && d.control !== "switch") {
-            params = { wattage: deviceWattage[d.name] };
-          }
-          await hass.callService(
-            "ha_ems",
-            intent === "on" ? "planning_device_slot" : "planning_device_clear",
-            { ...commonBase, time: slotTime, device_name: d.name, ...params }
-          );
-        }
-        applyBtn.textContent = `Applying\u2026 (${mi + 1}/${matched.length})`;
+      const actionFields = { action: selAction };
+      if (selAction === "charge") {
+        const untilPct = optNumVal("be-charge-until");
+        actionFields.wattage = numVal("be-charge-w", kwpW);
+        if (untilPct != null) actionFields.until_pct = untilPct;
+      } else if (selAction === "discharge") {
+        const untilPct = optNumVal("be-discharge-until");
+        actionFields.wattage = numVal("be-discharge-w", kwpW);
+        if (untilPct != null) actionFields.until_pct = untilPct;
+      } else if (selAction === "use_net") {
+        const maxWatts = optNumVal("be-usenet-max");
+        actionFields.use_solar = sr.getElementById("be-usenet-solar")?.classList.contains("on") ?? true;
+        if (maxWatts != null) actionFields.max_wattage = maxWatts;
+      } else if (selAction === "car_charge") {
+        const netCardOn = sr.getElementById("be-wc-car-net")?.classList.contains("on") ?? false;
+        const batCardOn = sr.getElementById("be-wc-car-bat")?.classList.contains("on") ?? false;
+        const batUntil = batCardOn ? optNumVal("be-car-bat-until") : null;
+        actionFields.use_solar = sr.getElementById("be-car-solar")?.classList.contains("on") ?? true;
+        actionFields.use_net_wattage = netCardOn ? numVal("be-car-net-w", 0) : 0;
+        actionFields.use_battery_wattage = batCardOn ? numVal("be-car-bat-w", 0) : 0;
+        if (batUntil != null) actionFields.use_battery_until_pct = batUntil;
       }
+      const devices = {};
+      for (const d of devicesAvailable) {
+        const intent = deviceIntents[d.name];
+        if (intent === "ignore") continue;
+        if (intent !== "on") {
+          devices[d.name] = null;
+          continue;
+        }
+        if (d.control === "modes") {
+          const mode = deviceMode[d.name];
+          devices[d.name] = mode ? { mode } : {};
+        } else if (d.control !== "switch") {
+          devices[d.name] = { wattage: deviceWattage[d.name] };
+        } else {
+          devices[d.name] = {};
+        }
+      }
+      const items = matched.map((idx) => {
+        const slot = slots[idx];
+        return { time: slot.start ?? slot.time, locked: true, ...actionFields, devices };
+      });
+      await hass.callService("ha_ems", "planning_bulk", { ...commonBase, slots: items });
       applyBtn.textContent = "\u2713 Applied";
       applyBtn.classList.add("success");
       setTimeout(() => {
@@ -1736,6 +1721,8 @@ function renderBulkEdit(ctx) {
 var EmsDashboardCard = class extends HTMLElement {
   constructor() {
     super();
+    // Bound once, so the same reference can be removed again.
+    this._onKeyBound = (e) => this._onKey(e);
     this.attachShadow({ mode: "open" });
     this._slots = [];
     this._filteredSlots = [];
@@ -1750,12 +1737,15 @@ var EmsDashboardCard = class extends HTMLElement {
     this._planningEntityId = null;
     this._kwpEntityId = null;
     this._entityRegistry = null;
+    this._lastStates = [];
   }
   setConfig(config) {
     if (!config.entity && !config.price?.entity)
       throw new Error("ems-dashboard-card: set entity or price.entity");
     this._config = config;
     this._buildDOM();
+    this._lastSer = "";
+    if (this._hass) this.hass = this._hass;
   }
   set hass(hass) {
     this._hass = hass;
@@ -1763,8 +1753,17 @@ var EmsDashboardCard = class extends HTMLElement {
     if (deviceId && !this._planningEntityId) {
       this._resolveDeviceEntities(deviceId);
     }
-    const slots = this._buildSlots(hass);
     const battEntity = resolveBatteryEntity(this._config, hass, this._planningEntityId);
+    const states = [
+      this._config?.price?.entity,
+      this._config?.entity,
+      this._planningEntityId || this._config?.integration?.planning_entity,
+      battEntity,
+      this._kwpEntityId
+    ].map((id) => id ? hass?.states[id] : void 0);
+    if (this._lastSer !== "" && states.length === this._lastStates.length && states.every((st, i) => st === this._lastStates[i])) return;
+    this._lastStates = states;
+    const slots = this._buildSlots(hass);
     const battState = battEntity ? hass?.states[battEntity]?.state : "";
     const ser = JSON.stringify(slots) + "|" + battState;
     if (ser !== this._lastSer) {
@@ -1793,14 +1792,14 @@ var EmsDashboardCard = class extends HTMLElement {
       if (!this._entityRegistry) {
         this._entityRegistry = await this._hass.callWS({ type: "config/entity_registry/list" });
       }
-      const entry = (this._entityRegistry || []).find(
-        (e) => e.device_id === deviceId && e.entity_id.includes("ems_planning")
+      const find = (suffix) => (this._entityRegistry || []).find(
+        (e) => e.device_id === deviceId && (e.unique_id ? e.unique_id.endsWith(`_${suffix}`) : e.entity_id.includes(suffix))
       );
+      const entry = find("ems_planning");
       if (entry) this._planningEntityId = entry.entity_id;
-      const kwpEntry = (this._entityRegistry || []).find(
-        (e) => e.device_id === deviceId && e.entity_id.includes("ems_kwp")
-      );
+      const kwpEntry = find("ems_kwp");
       if (kwpEntry) this._kwpEntityId = kwpEntry.entity_id;
+      if (entry || kwpEntry) this._lastSer = "";
     } catch (err) {
     }
   }
@@ -1976,7 +1975,6 @@ var EmsDashboardCard = class extends HTMLElement {
     this.shadowRoot.getElementById("overlay").addEventListener("click", (e) => {
       if (e.target.id === "overlay") this._closePopup();
     });
-    document.addEventListener("keydown", this._onKey.bind(this));
   }
   _render() {
     const sr = this.shadowRoot;
@@ -2277,8 +2275,11 @@ var EmsDashboardCard = class extends HTMLElement {
     if (e.key === "ArrowLeft") this._navigateSlot(this._activeIdx - 1);
     if (e.key === "ArrowRight") this._navigateSlot(this._activeIdx + 1);
   }
+  connectedCallback() {
+    document.addEventListener("keydown", this._onKeyBound);
+  }
   disconnectedCallback() {
-    document.removeEventListener("keydown", this._onKey.bind(this));
+    document.removeEventListener("keydown", this._onKeyBound);
   }
 };
 
