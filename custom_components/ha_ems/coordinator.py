@@ -63,6 +63,7 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         super().__init__(
             hass,
             _LOGGER,
+            config_entry=config_entry,
             name=f"{DOMAIN}_{config_entry.entry_id}",
             update_interval=_UPDATE_INTERVAL,
         )
@@ -518,6 +519,20 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
 
         return slots
 
+    def _cancel_slot_timer(self) -> None:
+        if self._unsub_slot_timer is not None:
+            self._unsub_slot_timer()
+            self._unsub_slot_timer = None
+
+    async def async_shutdown(self) -> None:
+        """Stop the slot-boundary timer along with the regular poll.
+
+        Without this, the timer of an unloaded coordinator keeps re-arming itself
+        on every refresh, leaving one live coordinator behind per reload.
+        """
+        self._cancel_slot_timer()
+        await super().async_shutdown()
+
     def _schedule_next_slot_refresh(self, slots: list[dict]) -> None:
         """Schedule a one-shot refresh at the start of the next slot.
 
@@ -527,9 +542,7 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         hass.async_create_task(async_refresh()) which cannot be cancelled.
         """
         # Cancel the previous boundary timer if still pending
-        if self._unsub_slot_timer is not None:
-            self._unsub_slot_timer()
-            self._unsub_slot_timer = None
+        self._cancel_slot_timer()
 
         if not slots:
             return

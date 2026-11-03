@@ -34,6 +34,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
 
     coordinator = EMSCoordinator(hass, entry)
+    entry.async_on_unload(coordinator.async_shutdown)
     await coordinator.async_load_planning()
     await coordinator.async_config_entry_first_refresh()
 
