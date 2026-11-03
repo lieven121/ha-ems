@@ -30,8 +30,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - run: uvx ruff check custom_components tests
+      - run: uvx ruff check custom_components tests tests_ha
       - run: uv run --no-project --python 3.13 --with pytest python -m pytest
+
+  ha:
+    name: Test inside Home Assistant
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      # Pulls in the latest Home Assistant release.
+      - run: >-
+          uv run --no-project --python 3.14
+          --with pytest-homeassistant-custom-component
+          python -m pytest tests_ha -o asyncio_mode=auto -p no:logging
 
   card:
     name: Type-check and build (card)
