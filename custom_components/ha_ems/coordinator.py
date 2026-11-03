@@ -666,14 +666,25 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
             )
             return
 
+        current_time = now()
         candidates = []
         for slot in slots:
             ts = parse_datetime(slot["start"])
-            if ts is None:
+            if ts is None or not start_dt <= ts < stop_dt:
                 continue
-            slot_end = ts + timedelta(hours=slot_duration_h)
-            # Slot must start within window and price must be acceptable
-            if ts >= start_dt and ts < stop_dt and slot["price"] <= max_price:
+            key = slot["start"]
+            existing = self._planning.get(key, {})
+            if existing.get("locked"):
+                # Locked slots are the user's call; never repurpose them.
+                continue
+            if ts + timedelta(hours=slot_duration_h) <= current_time:
+                continue  # already over
+            if existing.get("action") == ACTION_CAR_CHARGE:
+                # Re-running replaces the previous selection in this window
+                # instead of adding to it.
+                existing["action"] = ACTION_IDLE
+                existing["action_config"] = {}
+            if slot["price"] <= max_price:
                 candidates.append(slot)
 
         candidates.sort(key=lambda s: s["price"])
@@ -689,7 +700,7 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 action_config["use_battery_until_pct"] = use_battery_until_pct
             self._planning[key] = {
                 "action": ACTION_CAR_CHARGE,
-                "locked": existing.get("locked", False),
+                "locked": False,
                 "action_config": action_config,
                 "devices": dict(existing.get("devices") or {}),
             }
