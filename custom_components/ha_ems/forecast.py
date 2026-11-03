@@ -11,11 +11,13 @@ flat average consumption and no solar.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from homeassistant.core import HomeAssistant
-from homeassistant.util.dt import parse_datetime, utcnow
+from homeassistant.util.dt import as_local, parse_datetime, utcnow
+
+from .load_profile import house_load_wh
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -106,3 +108,94 @@ class EnergyDashboardSource:
                 except (TypeError, ValueError):
                     continue
         return total
+
+    # ------------------------------------------------------------------
+    # Metered history
+    # ------------------------------------------------------------------
+
+    async def async_house_load_history(
+        self, start: datetime, end: datetime
+    ) -> dict[datetime, float]:
+        """House load in Wh per hour between *start* and *end* (local hour starts).
+
+        Derived from the Energy dashboard's grid, solar and battery meters; see
+        load_profile.house_load_wh. Empty if no grid meter is configured.
+        """
+        prefs = await _async_energy_prefs(self.hass)
+        roles = _meter_roles(prefs)
+        if not roles["imports"]:
+            return {}
+        stat_ids = {sid for ids in roles.values() for sid in ids}
+
+        try:
+            from homeassistant.components.recorder import get_instance
+            from homeassistant.components.recorder.statistics import (
+                statistics_during_period,
+            )
+
+            stats = await get_instance(self.hass).async_add_executor_job(
+                statistics_during_period,
+                self.hass,
+                start,
+                end,
+                stat_ids,
+                "hour",
+                {"energy": "kWh"},
+                {"change"},
+            )
+        except Exception:  # noqa: BLE001 - recorder is optional, never fail planning
+            _LOGGER.debug("Reading energy statistics failed", exc_info=True)
+            return {}
+
+        def series(stat_id: str) -> dict[datetime, float]:
+            out: dict[datetime, float] = {}
+            for row in stats.get(stat_id) or []:
+                change = row.get("change")
+                ts = _row_start(row.get("start"))
+                if change is None or ts is None:
+                    continue
+                out[as_local(ts)] = float(change)
+            return out
+
+        return house_load_wh(
+            *([series(sid) for sid in roles[role]] for role in _ROLE_ORDER)
+        )
+
+
+_ROLE_ORDER = ("imports", "exports", "solar", "battery_out", "battery_in")
+
+
+def _meter_roles(prefs: dict[str, Any] | None) -> dict[str, list[str]]:
+    """Statistic IDs per role from the Energy dashboard config.
+
+    Accepts both grid layouts HA has used: ``flow_from``/``flow_to`` lists
+    on one grid source, and grid sources carrying the IDs directly.
+    """
+    roles: dict[str, list[str]] = {role: [] for role in _ROLE_ORDER}
+
+    def add(role: str, stat_id: Any) -> None:
+        if isinstance(stat_id, str) and stat_id and stat_id not in roles[role]:
+            roles[role].append(stat_id)
+
+    for grid in _sources(prefs, "grid"):
+        for flow in grid.get("flow_from") or []:
+            add("imports", flow.get("stat_energy_from"))
+        for flow in grid.get("flow_to") or []:
+            add("exports", flow.get("stat_energy_to"))
+        add("imports", grid.get("stat_energy_from"))
+        add("exports", grid.get("stat_energy_to"))
+    for solar in _sources(prefs, "solar"):
+        add("solar", solar.get("stat_energy_from"))
+    for battery in _sources(prefs, "battery"):
+        add("battery_out", battery.get("stat_energy_from"))
+        add("battery_in", battery.get("stat_energy_to"))
+    return roles
+
+
+def _row_start(value: Any) -> datetime | None:
+    """Statistics rows carry the start as a UNIX timestamp (or, long ago, a datetime)."""
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, (int, float)):
+        return datetime.fromtimestamp(value, tz=UTC)
+    return None
