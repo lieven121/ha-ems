@@ -13,26 +13,19 @@ def resample_energy_to_slots(
 ) -> list[float]:
     """Average power (W) in each slot, from energy (Wh) per period.
 
-    *periods* maps a period start to the energy in that period. A period lasts
-    until the next key (the last one as long as the one before it, or an hour
-    when there is only one), and its energy is spread evenly over it, so hourly
-    forecasts split cleanly into 15-minute slots and vice versa. Slots no
-    period covers get 0.
+    *periods* maps a period start to the energy in that period. Every period
+    is as long as the smallest gap between keys (an hour when there is only
+    one), and its energy is spread evenly over it, so hourly forecasts split
+    cleanly into 15-minute slots and vice versa. Missing periods count as 0:
+    Forecast.Solar, for one, leaves out the zero-energy hours of the night.
     """
     if not periods or not slot_starts or slot_hours <= 0:
         return [0.0] * len(slot_starts)
 
     starts = sorted(periods)
-    spans: list[tuple[datetime, datetime, float]] = []
-    for i, start in enumerate(starts):
-        if i + 1 < len(starts):
-            end = starts[i + 1]
-        elif i > 0:
-            end = start + (start - starts[i - 1])
-        else:
-            end = start + timedelta(hours=1)
-        if end > start:
-            spans.append((start, end, float(periods[start])))
+    gaps = [b - a for a, b in zip(starts, starts[1:], strict=False) if b > a]
+    length = min(gaps) if gaps else timedelta(hours=1)
+    spans = [(start, start + length, float(periods[start])) for start in starts]
 
     slot_len = timedelta(hours=slot_hours)
     out: list[float] = []

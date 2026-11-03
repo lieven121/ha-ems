@@ -83,7 +83,8 @@ class EnergyDashboardSource:
                 async_get_energy_platforms,
             )
 
-            platforms = await async_get_energy_platforms(self.hass)
+            # {domain: async_get_solar_forecast function}
+            forecasters = await async_get_energy_platforms(self.hass)
         except Exception:  # noqa: BLE001
             _LOGGER.debug("Energy platforms unavailable", exc_info=True)
             return {}
@@ -91,11 +92,11 @@ class EnergyDashboardSource:
         total: dict[datetime, float] = {}
         for entry_id in entry_ids:
             entry = self.hass.config_entries.async_get_entry(entry_id)
-            platform = platforms.get(entry.domain) if entry else None
-            if platform is None:
+            get_forecast = forecasters.get(entry.domain) if entry else None
+            if get_forecast is None:
                 continue
             try:
-                forecast = await platform.async_get_solar_forecast(self.hass, entry_id)
+                forecast = await get_forecast(self.hass, entry_id)
             except Exception:  # noqa: BLE001
                 _LOGGER.debug("Solar forecast from %s failed", entry_id, exc_info=True)
                 continue

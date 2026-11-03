@@ -33,3 +33,16 @@ def test_slots_outside_the_forecast_get_zero():
 
 def test_empty():
     assert resample_energy_to_slots({}, hours(2), 1.0) == [0.0, 0.0]
+
+
+def test_missing_night_hours_count_as_zero():
+    # Forecast.Solar omits zero hours: 18:00 is the last of the day, 07:00
+    # the first of the next. Nothing may leak into the night.
+    evening = T0.replace(hour=18)
+    periods = {evening - timedelta(hours=1): 300.0, evening: 100.0}
+    periods[evening + timedelta(hours=13)] = 50.0
+    slots = [evening + timedelta(hours=h) for h in range(15)]
+    out = resample_energy_to_slots(periods, slots, 1.0)
+    assert out[0] == pytest.approx(100)
+    assert out[1:13] == [0.0] * 12
+    assert out[13] == pytest.approx(50)
