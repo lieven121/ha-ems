@@ -333,6 +333,11 @@ header[hidden]{display:none;}
 .be-apply-btn.success{background:#16a34a;}
 .be-apply-btn.error{background:#dc2626;}
 .be-apply-btn:disabled{opacity:.5;cursor:default;}
+.be-locked-row{margin:0;padding:10px 16px 0;}
+.be-lock-row{border-top:none;padding-top:0;}
+.be-lock-btn{flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:transparent;color:inherit;font-family:var(--code-font-family,monospace);font-size:11px;cursor:pointer;transition:background .12s;}
+.be-lock-btn:hover{background:rgba(127,127,127,.12);}
+.be-lock-btn:disabled{opacity:.5;cursor:default;}
 
 /* Light theme */
 .root.theme-light {
@@ -578,12 +583,13 @@ function renderBatteryOverlay(sr, slots, config, hass, planningEntityId) {
   const enabled = config.layout?.show_battery !== false && n > 0;
   const showPred = enabled && predPoints.length > 1;
   const showCurrent = enabled && currentPct != null;
+  const forecastSvg = renderForecast(slots, config);
   const lineColor = rgbToCss(config.integration?.battery_line_color, "#06b6d4");
   if (battSvg) {
-    if (showPred || showCurrent) {
+    if (showPred || showCurrent || forecastSvg) {
       battSvg.setAttribute("viewBox", `0 0 100 ${CHART_H}`);
       battSvg.setAttribute("preserveAspectRatio", "none");
-      let svgContent = "";
+      let svgContent = forecastSvg;
       if (showPred) {
         const pathD = predPoints.map((p, i) => `${i === 0 ? "M" : "L"}${p.x} ${p.y}`).join(" ");
         svgContent += `<path d="${pathD}" fill="none" stroke="${lineColor}" stroke-width="2" stroke-dasharray="5 4" opacity="0.95" vector-effect="non-scaling-stroke"/>`;
@@ -615,6 +621,27 @@ function renderBatteryOverlay(sr, slots, config, hass, planningEntityId) {
       battAxis.setAttribute("hidden", "");
     }
   }
+}
+function renderForecast(slots, config) {
+  const n = slots.length;
+  if (n === 0 || config.layout?.show_forecast === false) return "";
+  const solar = slots.map((s) => Math.max(0, s.solar_w ?? 0));
+  const load = slots.map((s) => Math.max(0, s.load_w ?? 0));
+  const peak = Math.max(...solar, ...load);
+  if (!(peak > 0)) return "";
+  const y = (w) => (CHART_H - w / peak * CHART_H * 0.9).toFixed(1);
+  const x = (i) => ((i + 0.5) / n * 100).toFixed(2);
+  let out = "";
+  if (solar.some((w) => w > 0)) {
+    const top = solar.map((w, i) => `L${x(i)} ${y(w)}`).join(" ");
+    out += `<path d="M${x(0)} ${CHART_H} ${top} L${x(n - 1)} ${CHART_H} Z" fill="#facc15" opacity="0.22" stroke="none"/>`;
+    out += `<path d="${top.replace(/^L/, "M")}" fill="none" stroke="#eab308" stroke-width="1" opacity="0.8" vector-effect="non-scaling-stroke"/>`;
+  }
+  if (load.some((w) => w > 0)) {
+    const line = load.map((w, i) => `${i === 0 ? "M" : "L"}${x(i)} ${y(w)}`).join(" ");
+    out += `<path d="${line}" fill="none" stroke="#a855f7" stroke-width="1" opacity="0.7" vector-effect="non-scaling-stroke"/>`;
+  }
+  return out;
 }
 function renderBrush(sr, slots, activeIdx, nowIdx, config, onOpen, onScroll) {
   const n = slots.length;
@@ -837,8 +864,8 @@ function renderPopup(ctx) {
         </div>
       </div>
       <div class="action-locked-row">
-        <input type="checkbox" id="action-locked" ${slot.locked ? "checked" : ""}>
-        <span class="action-locked-label">Locked (prevent auto-replanning)</span>
+        <input type="checkbox" id="action-locked" checked>
+        <span class="action-locked-label">Lock (keep the optimizer off this slot)</span>
       </div>
       <div class="action-btn-row">
         <button class="action-apply-btn" id="action-apply">Apply</button>
@@ -1325,6 +1352,10 @@ function renderBulkEdit(ctx) {
     const applyBtn = sr.getElementById("be-apply");
     applyBtn.textContent = `Apply to ${matched.length} slot${matched.length !== 1 ? "s" : ""}`;
     applyBtn.disabled = matched.length === 0;
+    for (const id of ["be-lock", "be-unlock"]) {
+      const btn = sr.getElementById(id);
+      if (btn) btn.disabled = matched.length === 0;
+    }
   }
   const actions = [
     { key: "idle", label: "Idle", color: "#374151" },
@@ -1486,8 +1517,16 @@ function renderBulkEdit(ctx) {
 
     ${devicesHtml}
 
+    <div class="action-locked-row be-locked-row">
+      <input type="checkbox" id="be-locked" checked>
+      <span class="action-locked-label">Lock edited slots (keep the optimizer off them)</span>
+    </div>
     <div class="be-apply-row">
       <button class="be-apply-btn" id="be-apply"></button>
+    </div>
+    <div class="be-apply-row be-lock-row">
+      <button class="be-lock-btn" id="be-lock" title="Lock the matched slots without changing them">\u{1F512} Lock</button>
+      <button class="be-lock-btn" id="be-unlock" title="Unlock the matched slots so the optimizer may re-plan them">\u{1F513} Unlock</button>
     </div>
   `;
   sr.getElementById("be-close").addEventListener("click", () => ctx.onClose());
@@ -1639,7 +1678,7 @@ function renderBulkEdit(ctx) {
       deviceMode[devicesAvailable[di].name] = sel.value;
     });
   });
-  sr.querySelectorAll(".be-action-section .param-input, .be-time-input, .be-filter-input").forEach((el) => {
+  sr.querySelectorAll(".be-action-section .param-input, .be-time-input, .be-filter-input, #be-locked").forEach((el) => {
     el.addEventListener("click", (e) => e.stopPropagation());
   });
   sr.getElementById("be-apply").addEventListener("click", async (e) => {
@@ -1698,9 +1737,10 @@ function renderBulkEdit(ctx) {
           devices[d.name] = {};
         }
       }
+      const lockEdited = sr.getElementById("be-locked")?.checked ?? true;
       const items = matched.map((idx) => {
         const slot = slots[idx];
-        return { time: slot.start ?? slot.time, locked: true, ...actionFields, devices };
+        return { time: slot.start ?? slot.time, locked: lockEdited, ...actionFields, devices };
       });
       await hass.callService("ha_ems", "planning_bulk", { ...commonBase, slots: items });
       applyBtn.textContent = "\u2713 Applied";
@@ -1716,6 +1756,34 @@ function renderBulkEdit(ctx) {
       console.error("Bulk edit error:", err);
     }
   });
+  const setLock = async (btn, locked) => {
+    const matched = getMatchedIndices();
+    if (matched.length === 0) return;
+    const label = btn.textContent;
+    btn.disabled = true;
+    try {
+      await hass.callService("ha_ems", "planning_bulk", {
+        device_id: deviceId || entryId,
+        slots: matched.map((idx) => ({ time: slots[idx].start ?? slots[idx].time, locked }))
+      });
+      btn.textContent = locked ? `\u2713 Locked ${matched.length}` : `\u2713 Unlocked ${matched.length}`;
+      setTimeout(() => {
+        ctx.onApplied();
+        ctx.onClose();
+      }, 800);
+    } catch (err) {
+      btn.textContent = "\u2715 Error";
+      btn.disabled = false;
+      console.error("Bulk lock error:", err, label);
+    }
+  };
+  for (const [id, locked] of [["be-lock", true], ["be-unlock", false]]) {
+    const btn = sr.getElementById(id);
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      setLock(btn, locked);
+    });
+  }
   renderRangeUI();
 }
 
@@ -1858,6 +1926,8 @@ var EmsDashboardCard = class extends HTMLElement {
             car: p.car ?? slot.car,
             devices: p.devices ?? slot.devices,
             battery_prediction: p.battery_prediction ?? slot.battery_prediction,
+            solar_w: p.solar_w ?? slot.solar_w,
+            load_w: p.load_w ?? slot.load_w,
             price: slot.price || p.price || 0,
             _injPrice: slot._injPrice || p.injection_price || 0
           };
@@ -2323,7 +2393,8 @@ var EDITOR_SCHEMA = [
       { name: "show_actions", selector: { boolean: {} } },
       { name: "show_price_legend", selector: { boolean: {} } },
       { name: "show_action_legend", selector: { boolean: {} } },
-      { name: "show_battery", selector: { boolean: {} } }
+      { name: "show_battery", selector: { boolean: {} } },
+      { name: "show_forecast", selector: { boolean: {} } }
     ]
   },
   {
@@ -2364,6 +2435,7 @@ function editorLabel(schema) {
     show_price_legend: "Show Price Legend",
     show_action_legend: "Show Action Legend",
     show_battery: "Show Battery Line",
+    show_forecast: "Show Solar & Load Forecast",
     day: "Fixed Day",
     device_id: "EMS Device",
     battery_entity: "Current Battery Entity",
@@ -2390,7 +2462,8 @@ function editorHelper(schema) {
     device_id: "Select the EMS device. Used to read planning data and send service calls.",
     battery_entity: "Number or sensor entity for current battery state of charge (0\u2013100). Used to draw the current battery % line on the chart.",
     battery_line_color: "Color for the battery overlay lines. Defaults to a teal/cyan color.",
-    show_battery: "Overlay current (solid) and predicted (dashed) battery % on the chart (default: true when battery_entity is set)."
+    show_battery: "Overlay current (solid) and predicted (dashed) battery % on the chart (default: true when battery_entity is set).",
+    show_forecast: "Shade the solar forecast (yellow) and draw the predicted house load (purple) behind the price bars (default: true)."
   }[schema.name] ?? "";
 }
 var EmsDashboardCardEditor = class extends HTMLElement {
