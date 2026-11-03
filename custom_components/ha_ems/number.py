@@ -11,21 +11,20 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
-    DOMAIN,
     ENTITY_AVG_CONSUMPTION,
     ENTITY_KWP,
     ENTITY_MAX_BATTERY,
     ENTITY_MIN_BATTERY,
 )
-from .coordinator import EMSCoordinator
+from .coordinator import EMSConfigEntry, EMSCoordinator
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
+    config_entry: EMSConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    coordinator: EMSCoordinator = hass.data[DOMAIN][config_entry.entry_id]
+    coordinator = config_entry.runtime_data
     async_add_entities(
         [
             EMSMinBatteryNumber(coordinator, config_entry),

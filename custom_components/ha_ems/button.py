@@ -8,16 +8,16 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, ENTITY_OPTIMIZE
-from .coordinator import EMSCoordinator
+from .const import ENTITY_OPTIMIZE
+from .coordinator import EMSConfigEntry, EMSCoordinator
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: EMSConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    coordinator: EMSCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
     async_add_entities([EMSOptimizeButton(coordinator, entry)])
 
 

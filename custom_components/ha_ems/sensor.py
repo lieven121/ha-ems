@@ -14,19 +14,18 @@ from .const import (
     ACTION_LABELS,
     CONF_BATTERY_ENTITY_ID,
     CONF_BATTERY_SIZE_KWH,
-    DOMAIN,
     ENTITY_CURRENT_ACTION,
     ENTITY_PLANNING,
 )
-from .coordinator import EMSCoordinator
+from .coordinator import EMSConfigEntry, EMSCoordinator
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
+    config_entry: EMSConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    coordinator: EMSCoordinator = hass.data[DOMAIN][config_entry.entry_id]
+    coordinator = config_entry.runtime_data
     async_add_entities(
         [
             EMSPlanningSensor(coordinator, config_entry),

@@ -23,18 +23,17 @@ from .const import (
     CONF_DEVICE_DEFAULT_WATTAGE,
     CONF_DEVICE_NAME,
     CONF_DEVICE_SWITCH_ENTITY_ID,
-    DOMAIN,
     ENTITY_DEVICE_PREFIX,
 )
-from .coordinator import EMSCoordinator
+from .coordinator import EMSConfigEntry, EMSCoordinator
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
+    config_entry: EMSConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    coordinator: EMSCoordinator = hass.data[DOMAIN][config_entry.entry_id]
+    coordinator = config_entry.runtime_data
     sensors = [
         EMSDeviceSensor(coordinator, config_entry, device)
         for device in coordinator.configured_devices

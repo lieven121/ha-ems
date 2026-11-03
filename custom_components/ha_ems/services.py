@@ -8,7 +8,8 @@ from typing import Any
 
 import voluptuous as vol
 
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
@@ -223,16 +224,21 @@ def _get_coordinator_by_device(hass: HomeAssistant, device_id: str) -> EMSCoordi
     if device is None:
         raise ServiceValidationError(f"EMS device {device_id!r} not found")
     for entry_id in device.config_entries:
-        coord = hass.data.get(DOMAIN, {}).get(entry_id)
-        if coord is not None:
-            return coord
+        entry = hass.config_entries.async_get_entry(entry_id)
+        if (
+            entry is not None
+            and entry.domain == DOMAIN
+            and entry.state is ConfigEntryState.LOADED
+        ):
+            return entry.runtime_data
     raise ServiceValidationError(
         f"Device {device_id!r} is not a loaded EMS instance"
     )
 
 
-async def async_register_services(hass: HomeAssistant) -> None:
-    """Register all EMS services (idempotent – skips already-registered ones)."""
+@callback
+def async_register_services(hass: HomeAssistant) -> None:
+    """Register all EMS services. Called once, from async_setup."""
 
     def _make_action_handler(action: str):
         async def handler(call: ServiceCall) -> None:
@@ -328,16 +334,7 @@ async def async_register_services(hass: HomeAssistant) -> None:
     }
 
     for name, handler in _handlers.items():
-        if not hass.services.has_service(DOMAIN, name):
-            hass.services.async_register(
-                DOMAIN, name, handler, schema=_SERVICE_SCHEMAS[name]
-            )
+        hass.services.async_register(
+            DOMAIN, name, handler, schema=_SERVICE_SCHEMAS[name]
+        )
 
-
-async def async_unregister_services(hass: HomeAssistant) -> None:
-    """Remove all EMS services when the last entry is unloaded."""
-    if hass.data.get(DOMAIN):
-        return  # Other instances still active
-    for name in _SERVICE_SCHEMAS:
-        if hass.services.has_service(DOMAIN, name):
-            hass.services.async_remove(DOMAIN, name)

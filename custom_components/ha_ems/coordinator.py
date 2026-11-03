@@ -1000,3 +1000,6 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
 
         await self._async_commit()
 
+
+# A config entry whose runtime_data holds its coordinator.
+type EMSConfigEntry = ConfigEntry[EMSCoordinator]
