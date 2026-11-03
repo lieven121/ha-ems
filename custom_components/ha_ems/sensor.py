@@ -107,14 +107,12 @@ class EMSCurrentActionSensor(CoordinatorEntity[EMSCoordinator], SensorEntity):
         if not slot:
             return {}
         action_config = slot.get("action_config") or {}
-        car = slot.get("car") or {}
         attrs: dict[str, Any] = {
             "action": slot["action"],
             "start": slot["start"],
             "price": slot.get("price"),
             "locked": slot.get("locked", False),
             "action_config": action_config,
-            "car": car,
             "devices": slot.get("devices") or [],
         }
         # Also flatten action_config into top-level for easy automation use

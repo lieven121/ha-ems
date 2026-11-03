@@ -34,6 +34,5 @@ class EMSOptimizeButton(ButtonEntity):
         self._attr_device_info: DeviceInfo = coordinator.device_info
 
     async def async_press(self) -> None:
-        """Run the optimizer and refresh the planning sensor."""
+        """Run the optimizer (which refreshes the plan itself)."""
         await self._coordinator.async_optimize()
-        await self._coordinator.async_refresh()

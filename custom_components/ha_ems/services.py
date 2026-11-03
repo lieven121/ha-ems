@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Mapping
 from typing import Any
 
@@ -58,8 +57,6 @@ from .const import (
     SERVICE_PLANNING_USE_NET,
 )
 from .coordinator import EMSCoordinator
-
-_LOGGER = logging.getLogger(__name__)
 
 _COMMON: dict[vol.Marker, Any] = {
     vol.Required(FIELD_DEVICE_ID): cv.string,
