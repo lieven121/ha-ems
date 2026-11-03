@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import math
+from dataclasses import replace
 from functools import cached_property
 
 from datetime import datetime, timedelta
@@ -38,14 +39,10 @@ from .const import (
     CONF_PRICE_KEY,
     CONF_ROUNDTRIP_LOSS_PCT,
     CONF_START_KEY,
-    DEFAULT_AVG_CONSUMPTION,
     DEFAULT_DEVICE_WATTAGE,
-    DEFAULT_KWP,
     DEVICE_CONTROL_MODES,
     DEVICE_CONTROL_WATTAGE,
     DEVICE_CONTROLS,
-    DEFAULT_MAX_BATTERY,
-    DEFAULT_MIN_BATTERY,
     DEFAULT_ROUNDTRIP_LOSS_PCT,
     DOMAIN,
     EVENT_ACTION_CHANGED,
@@ -53,6 +50,7 @@ from .const import (
     STORAGE_VERSION,
 )
 
+from .models import EMSSettings
 from .simulation import step_soc
 
 _LOGGER = logging.getLogger(__name__)
@@ -82,12 +80,7 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         self._planning: dict[str, dict[str, Any]] = {}
 
         # Live-editable values (backed by number/switch entities)
-        self._min_battery: float = DEFAULT_MIN_BATTERY
-        self._max_battery: float = DEFAULT_MAX_BATTERY
-        self._avg_consumption: float = DEFAULT_AVG_CONSUMPTION
-        self._allow_discharge: bool = False
-        self._allow_idle_for_optimize: bool = True  # default: idle on expensive slots
-        self._kwp: float = DEFAULT_KWP  # max charge power in watts
+        self.settings = EMSSettings()
 
         self._last_action: str | None = None
         # Index into self.data of the slot containing "now", recomputed on
@@ -199,7 +192,7 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
 
     def _slot_load_w(self, slot: dict) -> float:
         """House load during *slot*: baseline plus any scheduled devices."""
-        return self._avg_consumption + self._slot_device_wattage(slot)
+        return self.settings.avg_consumption + self._slot_device_wattage(slot)
 
     def _slot_device_wattage(self, slot: dict) -> float:
         """Total draw in watts of every device scheduled in *slot*."""
@@ -213,6 +206,16 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
             except (TypeError, ValueError):
                 continue
         return total
+
+    async def async_update_settings(self, **changes: Any) -> None:
+        """Change one or more settings, validate them, and re-plan."""
+        new = replace(self.settings, **changes)
+        try:
+            new.validate()
+        except ValueError as err:
+            raise ServiceValidationError(str(err)) from err
+        self.settings = new
+        await self.async_refresh()
 
     # ------------------------------------------------------------------
     # Persistence
@@ -835,7 +838,7 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         has_battery = bool(battery_size_kwh and battery_size_kwh > 0)
         battery_kwh = float(battery_size_kwh) if has_battery else 0.0
         # Cap charge wattage at the configured kWp (inverter/solar limit)
-        default_wattage = min(self._kwp, MAX_DEFAULT_WATTAGE) if has_battery else 0.0
+        default_wattage = min(self.settings.kwp_w, MAX_DEFAULT_WATTAGE) if has_battery else 0.0
 
         def step(soc: float, slot: dict, action: str, action_config: dict) -> float:
             return step_soc(
@@ -850,7 +853,7 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
 
         current_soc = self._get_current_soc()
         if current_soc is None:
-            current_soc = (self._min_battery + self._max_battery) / 2.0
+            current_soc = (self.settings.min_battery + self.settings.max_battery) / 2.0
 
         # All future slots including locked/car for simulation accuracy
         future_slots = [
@@ -903,7 +906,7 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 # Find first slot where SoC drops below min
                 breach_key: str | None = None
                 for key, soc_after in trajectory:
-                    if soc_after < self._min_battery:
+                    if soc_after < self.settings.min_battery:
                         breach_key = key
                         break
 
@@ -954,7 +957,7 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 action_config: dict[str, Any] = dict(existing.get("action_config", {}))
             else:
                 if assignments[key] == ACTION_CHARGE:
-                    if soc >= self._max_battery:
+                    if soc >= self.settings.max_battery:
                         action = ACTION_IDLE
                         action_config = {}
                     else:
@@ -962,17 +965,17 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                         action = ACTION_CHARGE
                         action_config = {
                             "wattage": default_wattage,
-                            "until_pct": round(min(predicted_soc_after, self._max_battery), 1),
+                            "until_pct": round(min(predicted_soc_after, self.settings.max_battery), 1),
                         }
-                elif slot["price"] <= effective_battery_cost or soc <= self._min_battery:
+                elif slot["price"] <= effective_battery_cost or soc <= self.settings.min_battery:
                     # Cheap slot or battery depleted → use grid, spare the battery
                     action = ACTION_USE_NET
                     # Solar always takes precedence when using the grid
                     action_config = {"use_solar": True}
-                elif self._allow_idle_for_optimize:
+                elif self.settings.allow_idle_for_optimize:
                     # Price is above effective cost → let battery power the home
-                    if self._allow_discharge:
-                        if step(soc, slot, ACTION_DISCHARGE, {}) >= self._min_battery:
+                    if self.settings.allow_discharge:
+                        if step(soc, slot, ACTION_DISCHARGE, {}) >= self.settings.min_battery:
                             action = ACTION_DISCHARGE
                             action_config = {"wattage": default_wattage}
                         else:

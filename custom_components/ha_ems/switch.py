@@ -1,9 +1,11 @@
-"""Switch entity for HA-EMS allow-discharge toggle."""
+"""Switch entities for HA-EMS optimiser toggles."""
 
 from __future__ import annotations
 
-from homeassistant.components.switch import SwitchEntity
-from homeassistant.config_entries import ConfigEntry
+from dataclasses import dataclass
+from typing import Any
+
+from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -13,86 +15,83 @@ from .const import ENTITY_ALLOW_DISCHARGE, ENTITY_ALLOW_IDLE_FOR_OPTIMIZE
 from .coordinator import EMSConfigEntry, EMSCoordinator
 
 
+@dataclass(frozen=True, kw_only=True)
+class EMSSwitchDescription(SwitchEntityDescription):
+    """A switch backed by one boolean field of EMSSettings."""
+
+    setting: str
+
+
+SWITCHES: tuple[EMSSwitchDescription, ...] = (
+    # Whether the optimiser may assign discharge actions.
+    EMSSwitchDescription(
+        key=ENTITY_ALLOW_DISCHARGE,
+        name="EMS Allow Discharge",
+        setting="allow_discharge",
+        icon="mdi:battery-arrow-down",
+    ),
+    # Whether the optimiser may leave expensive slots as idle.
+    #   ON (default): slots priced above the effective battery cost -> idle
+    #     (let the battery power the home, worth it vs the grid price).
+    #   OFF: every non-charge slot -> use_net (preserve the battery).
+    EMSSwitchDescription(
+        key=ENTITY_ALLOW_IDLE_FOR_OPTIMIZE,
+        name="EMS Allow Idle (Optimizer)",
+        setting="allow_idle_for_optimize",
+        icon="mdi:battery-clock",
+    ),
+)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: EMSConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator = config_entry.runtime_data
-    async_add_entities([
-        EMSAllowDischargeSwitch(coordinator, config_entry),
-        EMSAllowIdleForOptimizeSwitch(coordinator, config_entry),
-    ])
+    async_add_entities(
+        EMSSettingSwitch(coordinator, config_entry, description)
+        for description in SWITCHES
+    )
 
 
-class EMSAllowDischargeSwitch(
-    CoordinatorEntity[EMSCoordinator], SwitchEntity, RestoreEntity
-):
-    """Controls whether the optimizer may assign discharge actions."""
+class EMSSettingSwitch(CoordinatorEntity[EMSCoordinator], SwitchEntity, RestoreEntity):
+    """Toggle one optimiser setting; the value survives restarts."""
 
-    _attr_icon = "mdi:battery-arrow-down"
+    entity_description: EMSSwitchDescription
 
     def __init__(
-        self, coordinator: EMSCoordinator, config_entry: ConfigEntry
+        self,
+        coordinator: EMSCoordinator,
+        config_entry: EMSConfigEntry,
+        description: EMSSwitchDescription,
     ) -> None:
         super().__init__(coordinator)
-        self._attr_unique_id = f"{config_entry.entry_id}_{ENTITY_ALLOW_DISCHARGE}"
-        self._attr_name = "EMS Allow Discharge"
+        self.entity_description = description
+        self._attr_unique_id = f"{config_entry.entry_id}_{description.key}"
         self._attr_device_info = coordinator.device_info
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         last = await self.async_get_last_state()
-        if last:
-            self.coordinator._allow_discharge = last.state == "on"
+        # Only a real on/off restores; "unavailable" used to switch it off.
+        if last and last.state in ("on", "off"):
+            setattr(
+                self.coordinator.settings,
+                self.entity_description.setting,
+                last.state == "on",
+            )
 
     @property
     def is_on(self) -> bool:
-        return self.coordinator._allow_discharge
+        return getattr(self.coordinator.settings, self.entity_description.setting)
 
-    async def async_turn_on(self, **kwargs) -> None:
-        self.coordinator._allow_discharge = True
-        await self.coordinator.async_refresh()
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self.coordinator.async_update_settings(
+            **{self.entity_description.setting: True}
+        )
 
-    async def async_turn_off(self, **kwargs) -> None:
-        self.coordinator._allow_discharge = False
-        await self.coordinator.async_refresh()
-
-
-class EMSAllowIdleForOptimizeSwitch(
-    CoordinatorEntity[EMSCoordinator], SwitchEntity, RestoreEntity
-):
-    """Controls whether the optimizer may leave expensive slots as idle.
-
-    When ON (default): slots with price > effective_battery_cost → idle
-      (let battery power the home — worth it vs grid cost).
-    When OFF: all non-charge slots → use_net (preserve battery, always use grid).
-    """
-
-    _attr_icon = "mdi:battery-clock"
-
-    def __init__(
-        self, coordinator: EMSCoordinator, config_entry: ConfigEntry
-    ) -> None:
-        super().__init__(coordinator)
-        self._attr_unique_id = f"{config_entry.entry_id}_{ENTITY_ALLOW_IDLE_FOR_OPTIMIZE}"
-        self._attr_name = "EMS Allow Idle (Optimizer)"
-        self._attr_device_info = coordinator.device_info
-
-    async def async_added_to_hass(self) -> None:
-        await super().async_added_to_hass()
-        last = await self.async_get_last_state()
-        if last:
-            self.coordinator._allow_idle_for_optimize = last.state == "on"
-
-    @property
-    def is_on(self) -> bool:
-        return self.coordinator._allow_idle_for_optimize
-
-    async def async_turn_on(self, **kwargs) -> None:
-        self.coordinator._allow_idle_for_optimize = True
-        await self.coordinator.async_refresh()
-
-    async def async_turn_off(self, **kwargs) -> None:
-        self.coordinator._allow_idle_for_optimize = False
-        await self.coordinator.async_refresh()
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self.coordinator.async_update_settings(
+            **{self.entity_description.setting: False}
+        )
