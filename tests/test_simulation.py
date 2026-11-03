@@ -9,7 +9,12 @@ from ha_ems.const import (
     ACTION_IDLE,
     ACTION_USE_NET,
 )
-from ha_ems.simulation import car_battery_budget_w, step_soc
+from ha_ems.simulation import (
+    car_battery_budget_w,
+    one_way_efficiency,
+    simulate_slot,
+    step_soc,
+)
 
 # 10 kWh battery, 1 h slots: 100 W over a slot is 1 % of SoC.
 KWH = 10.0
@@ -21,8 +26,8 @@ H = 1.0
     [
         # idle: the house load comes from the battery
         (50, ACTION_IDLE, {}, 500, 45),
-        # charge: wattage in, load out
-        (50, ACTION_CHARGE, {"wattage": 3000}, 500, 75),
+        # charge: wattage in; the house runs on the grid meanwhile
+        (50, ACTION_CHARGE, {"wattage": 3000}, 500, 80),
         # discharge: wattage out, load out
         (50, ACTION_DISCHARGE, {"wattage": 1000}, 500, 35),
         # use_net: battery untouched...
@@ -40,7 +45,7 @@ def test_actions(soc, action, cfg, load_w, expected):
 
 
 def test_default_wattage_used_when_config_has_none():
-    assert step_soc(50, ACTION_CHARGE, {}, 500, H, KWH, 2000) == pytest.approx(65)
+    assert step_soc(50, ACTION_CHARGE, {}, 500, H, KWH, 2000) == pytest.approx(70)
 
 
 @pytest.mark.parametrize(
@@ -78,3 +83,80 @@ def test_slot_length_scales_the_change():
 )
 def test_car_battery_budget(cfg, expected):
     assert car_battery_budget_w(cfg) == expected
+
+
+# ---- solar, losses and grid flows -------------------------------------------
+
+
+def sim(soc, action, cfg=None, load=500, solar=0, **kw):
+    return simulate_slot(soc, action, cfg or {}, load, H, KWH, solar_w=solar, **kw)
+
+
+def test_idle_solar_surplus_charges_the_battery():
+    r = sim(50, ACTION_IDLE, load=500, solar=2500)
+    assert r.soc == pytest.approx(70)  # 2000 W surplus = 20 %
+    assert r.import_kwh == 0 and r.export_kwh == 0
+
+
+def test_idle_surplus_beyond_charge_cap_is_exported():
+    r = sim(50, ACTION_IDLE, load=500, solar=2500, max_charge_w=1500)
+    assert r.soc == pytest.approx(65)
+    assert r.export_kwh == pytest.approx(0.5)
+
+
+def test_idle_surplus_exported_once_full():
+    r = sim(95, ACTION_IDLE, load=500, solar=2500)
+    assert r.soc == 100
+    assert r.export_kwh == pytest.approx(1.5)
+
+
+def test_idle_partial_solar_reduces_battery_drain():
+    r = sim(50, ACTION_IDLE, load=1000, solar=400)
+    assert r.soc == pytest.approx(44)
+    assert r.import_kwh == 0
+
+
+def test_idle_empty_battery_imports_the_rest():
+    r = sim(2, ACTION_IDLE, load=1000)
+    assert r.soc == 0
+    assert r.import_kwh == pytest.approx(0.8)
+
+
+def test_use_net_holds_battery_and_exports_surplus():
+    r = sim(50, ACTION_USE_NET, load=500, solar=2000)
+    assert r.soc == 50
+    assert r.export_kwh == pytest.approx(1.5)
+    r = sim(50, ACTION_USE_NET, load=1500, solar=500)
+    assert r.import_kwh == pytest.approx(1.0)
+
+
+def test_charge_imports_charge_and_load():
+    r = sim(50, ACTION_CHARGE, {"wattage": 2000}, load=500)
+    assert r.soc == pytest.approx(70)
+    assert r.import_kwh == pytest.approx(2.5)
+
+
+def test_charge_uses_larger_solar_surplus():
+    r = sim(50, ACTION_CHARGE, {"wattage": 1000}, load=500, solar=3500)
+    assert r.soc == pytest.approx(80)
+    assert r.import_kwh == 0 and r.export_kwh == 0
+
+
+def test_charge_stops_exactly_at_target():
+    r = sim(50, ACTION_CHARGE, {"wattage": 3000, "until_pct": 60}, load=500)
+    assert r.soc == pytest.approx(60)
+    assert r.import_kwh == pytest.approx(1.5)  # 1000 W charge + 500 W load
+
+
+def test_discharge_exports():
+    r = sim(80, ACTION_DISCHARGE, {"wattage": 2000}, load=500)
+    assert r.soc == pytest.approx(55)
+    assert r.export_kwh == pytest.approx(2.0)
+
+
+def test_efficiency_applies_both_ways():
+    eta = one_way_efficiency(19)  # sqrt(0.81) = 0.9
+    assert eta == pytest.approx(0.9)
+    charged = sim(50, ACTION_CHARGE, {"wattage": 1000}, load=0, efficiency=eta)
+    assert charged.soc == pytest.approx(59)
+    assert sim(50, ACTION_IDLE, load=900, efficiency=eta).soc == pytest.approx(40)

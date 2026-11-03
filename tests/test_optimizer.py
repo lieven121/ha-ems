@@ -62,8 +62,8 @@ def test_breach_promotes_cheapest_slot_before_it():
 
 def test_charge_sets_until_pct_to_predicted_soc():
     plan = run(slots([30, 5, 25]), soc=30)
-    # s0 idle: 30 -> 20; s1 charge: 20 + 30 - 10 = 40
-    assert plan["s1"][1]["until_pct"] == 40.0
+    # s0 idle: 30 -> 20; s1 charge: 20 + 30 = 50 (the load runs on the grid)
+    assert plan["s1"][1]["until_pct"] == 50.0
 
 
 def test_cheap_slots_use_the_grid():
