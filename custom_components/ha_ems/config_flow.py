@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 import voluptuous as vol
-
 from homeassistant import config_entries
 from homeassistant.helpers.selector import (
     EntitySelector,
@@ -36,13 +35,13 @@ from .const import (
     CONF_ROUNDTRIP_LOSS_PCT,
     CONF_START_KEY,
     DEFAULT_DEVICE_WATTAGE,
-    DEVICE_CONTROL_MODES,
-    DEVICE_CONTROL_WATTAGE,
-    DEVICE_CONTROLS,
     DEFAULT_PRICE_ATTRIBUTE,
     DEFAULT_PRICE_KEY,
     DEFAULT_ROUNDTRIP_LOSS_PCT,
     DEFAULT_START_KEY,
+    DEVICE_CONTROL_MODES,
+    DEVICE_CONTROL_WATTAGE,
+    DEVICE_CONTROLS,
     DOMAIN,
 )
 

@@ -5,9 +5,8 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import replace
-from functools import cached_property
-
 from datetime import datetime, timedelta
+from functools import cached_property
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -37,16 +36,15 @@ from .const import (
     CONF_ROUNDTRIP_LOSS_PCT,
     CONF_START_KEY,
     DEFAULT_DEVICE_WATTAGE,
+    DEFAULT_ROUNDTRIP_LOSS_PCT,
     DEVICE_CONTROL_MODES,
     DEVICE_CONTROL_WATTAGE,
     DEVICE_CONTROLS,
-    DEFAULT_ROUNDTRIP_LOSS_PCT,
     DOMAIN,
     EVENT_ACTION_CHANGED,
     MAX_DEFAULT_WATTAGE,
     STORAGE_VERSION,
 )
-
 from .models import EMSSettings
 from .optimizer import OptimizerSlot, optimize
 from .simulation import step_soc

@@ -1,0 +1,17 @@
+# Tooling config only: the integration itself is installed by HACS / copying
+# custom_components/ha_ems, not as a Python package.
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = ["node_modules"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["ha_ems"]
+known-third-party = ["homeassistant"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

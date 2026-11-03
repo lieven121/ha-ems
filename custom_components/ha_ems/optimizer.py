@@ -105,7 +105,7 @@ def optimize(
     # Locked charge slots count too: they are charge energy all the same.
     charge_prices = [
         slot.price
-        for slot, action in zip(slots, assignments)
+        for slot, action in zip(slots, assignments, strict=True)
         if action == ACTION_CHARGE
     ]
     effective_battery_cost = (
@@ -115,7 +115,7 @@ def optimize(
     # ---- Phase 3: final assignment pass ---------------------------------------
     result: dict[str, tuple[str, dict[str, Any]]] = {}
     soc = current_soc
-    for slot, assigned in zip(slots, assignments):
+    for slot, assigned in zip(slots, assignments, strict=True):
         if slot.is_fixed:
             action, cfg = assigned, slot.fixed_config
         else:
