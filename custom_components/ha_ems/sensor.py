@@ -4,8 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorStateClass,
+)
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory, UnitOfPower
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -16,6 +21,8 @@ from .const import (
     CONF_BATTERY_SIZE_KWH,
     ENTITY_CURRENT_ACTION,
     ENTITY_PLANNING,
+    ENTITY_PREDICTED_LOAD,
+    ENTITY_SOLAR_FORECAST,
 )
 from .coordinator import EMSConfigEntry, EMSCoordinator
 
@@ -30,6 +37,8 @@ async def async_setup_entry(
         [
             EMSPlanningSensor(coordinator, config_entry),
             EMSCurrentActionSensor(coordinator, config_entry),
+            EMSSolarForecastSensor(coordinator, config_entry),
+            EMSPredictedLoadSensor(coordinator, config_entry),
         ]
     )
 
@@ -121,3 +130,58 @@ class EMSCurrentActionSensor(CoordinatorEntity[EMSCoordinator], SensorEntity):
         if battery is not None:
             attrs["battery_prediction"] = battery
         return attrs
+
+
+class _EMSForecastSensor(CoordinatorEntity[EMSCoordinator], SensorEntity):
+    """Diagnostic power forecast for the current slot."""
+
+    _attr_has_entity_name = True
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _key: str
+    _slot_field: str
+
+    def __init__(
+        self, coordinator: EMSCoordinator, config_entry: ConfigEntry
+    ) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{config_entry.entry_id}_{self._key}"
+        self._attr_translation_key = self._key
+        self._attr_device_info = coordinator.device_info
+
+    @property
+    def native_value(self) -> float | None:
+        slot = self.coordinator.current_slot
+        return slot.get(self._slot_field) if slot else None
+
+
+class EMSSolarForecastSensor(_EMSForecastSensor):
+    """Forecast PV output now, from the Energy dashboard's solar forecast."""
+
+    _attr_icon = "mdi:solar-power-variant"
+    _key = ENTITY_SOLAR_FORECAST
+    _slot_field = "solar_w"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "today_kwh": self.coordinator.solar_energy_kwh(0),
+            "tomorrow_kwh": self.coordinator.solar_energy_kwh(1),
+        }
+
+
+class EMSPredictedLoadSensor(_EMSForecastSensor):
+    """Expected house load now (without scheduled devices)."""
+
+    _attr_icon = "mdi:home-lightning-bolt"
+    _key = ENTITY_PREDICTED_LOAD
+    _slot_field = "base_load_w"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "source": self.coordinator.load_source,
+            "profile_days": self.coordinator.load_profile.days,
+        }

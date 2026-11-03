@@ -171,6 +171,12 @@
       },
       "ems_current_action": {
         "name": "Current Action"
+      },
+      "ems_solar_forecast": {
+        "name": "Solar Forecast"
+      },
+      "ems_predicted_load": {
+        "name": "Predicted Load"
       }
     },
     "button": {

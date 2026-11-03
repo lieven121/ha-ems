@@ -81,6 +81,8 @@ ENTITY_ALLOW_IDLE_FOR_OPTIMIZE = "ems_allow_idle_for_optimize"
 ENTITY_KWP = "ems_kwp"
 ENTITY_PLANNING = "ems_planning"
 ENTITY_CURRENT_ACTION = "ems_current_action"
+ENTITY_SOLAR_FORECAST = "ems_solar_forecast"
+ENTITY_PREDICTED_LOAD = "ems_predicted_load"
 ENTITY_OPTIMIZE = "ems_optimize"
 ENTITY_DEVICE_PREFIX = "ems_device"
 
