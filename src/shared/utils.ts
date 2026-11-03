@@ -17,10 +17,10 @@ export function esc(value: unknown): string {
  */
 export function priceScore(price: number, allPrices: number[]): number {
   if (allPrices.length === 0) return 5;
-  const sorted = [...allPrices].sort((a, b) => a - b);
-  // Percentile: how many prices are >= this price (higher = cheaper relative to others)
-  const cheaperCount = sorted.filter(p => p >= price).length;
-  const pct = cheaperCount / sorted.length; // 1.0 = cheapest, 0.0 = most expensive
+  // Percentile: how many prices are >= this price (higher = cheaper relative to others).
+  // A count, so no sorting is needed.
+  const cheaperCount = allPrices.filter(p => p >= price).length;
+  const pct = cheaperCount / allPrices.length; // 1.0 = cheapest, 0.0 = most expensive
   return Math.max(1, Math.min(10, Math.round(pct * 9 + 1)));
 }
 
