@@ -20,6 +20,11 @@ export class EmsDashboardCard extends HTMLElement {
   private _planningEntityId: string | null;
   private _kwpEntityId: string | null;
   private _entityRegistry: any;
+  // State objects the card renders from, as of the last render. HA replaces a
+  // state object whenever it changes, so identity tells us if anything moved.
+  private _lastStates: unknown[];
+  // Bound once, so the same reference can be removed again.
+  private readonly _onKeyBound = (e: KeyboardEvent) => this._onKey(e);
 
   constructor() {
     super();
@@ -37,6 +42,7 @@ export class EmsDashboardCard extends HTMLElement {
     this._planningEntityId = null;
     this._kwpEntityId      = null;
     this._entityRegistry   = null;
+    this._lastStates       = [];
   }
 
   setConfig(config: CardConfig) {
@@ -44,6 +50,10 @@ export class EmsDashboardCard extends HTMLElement {
       throw new Error('ems-dashboard-card: set entity or price.entity');
     this._config = config;
     this._buildDOM();
+    // The DOM was just rebuilt empty: force the next hass update to render
+    // into it, and render now if hass is already known.
+    this._lastSer = '';
+    if (this._hass) this.hass = this._hass;
   }
 
   set hass(hass: any) {
@@ -52,10 +62,26 @@ export class EmsDashboardCard extends HTMLElement {
     if (deviceId && !this._planningEntityId) {
       this._resolveDeviceEntities(deviceId);
     }
+    // `hass` is reassigned on every state change anywhere in the house. Skip
+    // the (expensive) slot rebuild unless one of our own entities changed.
+    const battEntity = resolveBatteryEntity(this._config, hass, this._planningEntityId);
+    const states = [
+      this._config?.price?.entity,
+      this._config?.entity,
+      this._planningEntityId || this._config?.integration?.planning_entity,
+      battEntity,
+      this._kwpEntityId,
+    ].map(id => (id ? hass?.states[id] : undefined));
+    if (
+      this._lastSer !== '' &&
+      states.length === this._lastStates.length &&
+      states.every((st, i) => st === this._lastStates[i])
+    ) return;
+    this._lastStates = states;
+
     const slots = this._buildSlots(hass);
     // The battery SoC entity is not part of `slots`, so fold its state into the
     // change key — otherwise the overlay never redraws as the battery moves.
-    const battEntity = resolveBatteryEntity(this._config, hass, this._planningEntityId);
     const battState  = battEntity ? hass?.states[battEntity]?.state : '';
     const ser = JSON.stringify(slots) + '|' + battState;
     if (ser !== this._lastSer) {
@@ -87,15 +113,19 @@ export class EmsDashboardCard extends HTMLElement {
       if (!this._entityRegistry) {
         this._entityRegistry = await this._hass.callWS({ type: 'config/entity_registry/list' });
       }
-      const entry = (this._entityRegistry || []).find(
-        (e: any) => e.device_id === deviceId && e.entity_id.includes('ems_planning')
+      // Match on unique_id: it is fixed, while entity_id can be renamed.
+      const find = (suffix: string) => (this._entityRegistry || []).find(
+        (e: any) => e.device_id === deviceId && (
+          e.unique_id ? e.unique_id.endsWith(`_${suffix}`) : e.entity_id.includes(suffix)
+        )
       );
+      const entry = find('ems_planning');
       if (entry) this._planningEntityId = entry.entity_id;
 
-      const kwpEntry = (this._entityRegistry || []).find(
-        (e: any) => e.device_id === deviceId && e.entity_id.includes('ems_kwp')
-      );
+      const kwpEntry = find('ems_kwp');
       if (kwpEntry) this._kwpEntityId = kwpEntry.entity_id;
+      // The entities just resolved; let the next hass update render with them.
+      if (entry || kwpEntry) this._lastSer = '';
     } catch (err) {
       // Non-fatal: falls back to planning_entity config key / hardcoded default
     }
@@ -284,7 +314,6 @@ export class EmsDashboardCard extends HTMLElement {
     this.shadowRoot!.getElementById('overlay')!.addEventListener('click', (e: Event) => {
       if ((e.target as HTMLElement).id === 'overlay') this._closePopup();
     });
-    document.addEventListener('keydown', this._onKey.bind(this));
   }
 
   _render() {
@@ -617,7 +646,11 @@ export class EmsDashboardCard extends HTMLElement {
     if (e.key === 'ArrowRight') this._navigateSlot(this._activeIdx! + 1);
   }
 
+  connectedCallback() {
+    document.addEventListener('keydown', this._onKeyBound);
+  }
+
   disconnectedCallback() {
-    document.removeEventListener('keydown', this._onKey.bind(this));
+    document.removeEventListener('keydown', this._onKeyBound);
   }
 }
