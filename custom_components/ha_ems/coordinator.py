@@ -21,10 +21,7 @@ from homeassistant.util.dt import now, parse_datetime
 
 from .const import (
     ACTION_CAR_CHARGE,
-    ACTION_CHARGE,
-    ACTION_DISCHARGE,
     ACTION_IDLE,
-    ACTION_USE_NET,
     CONF_BATTERY_ENTITY_ID,
     CONF_BATTERY_SIZE_KWH,
     CONF_DEVICE_CONTROL,
@@ -51,6 +48,7 @@ from .const import (
 )
 
 from .models import EMSSettings
+from .optimizer import OptimizerSlot, optimize
 from .simulation import step_soc
 
 _LOGGER = logging.getLogger(__name__)
@@ -811,22 +809,10 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         await self._async_commit()
 
     async def async_optimize(self) -> None:
-        """Rebuild planning using iterative breach-detection (mirrors Node-RED logic).
-
-        Algorithm:
-        1. Start with all unlocked future slots as 'idle' (battery drains naturally).
-        2. Simulate forward. If SoC would drop below min_battery at any point,
-           find the cheapest idle slot *before* that breach and promote it to charge.
-           Recalculate and repeat until no breach.
-        3. Determine effective battery cost (max charge price × (1 + roundtrip_loss)).
-        4. Final pass: non-charge slots with price ≤ effective_cost → use_net;
-           slots above the threshold (and SoC allows) → idle (or discharge if enabled).
-        """
+        """Re-plan every unlocked future slot; see optimizer.optimize."""
         cfg = self._cfg()
         battery_size_kwh: float | None = cfg.get(CONF_BATTERY_SIZE_KWH)
-        roundtrip_loss_pct = float(
-            cfg.get(CONF_ROUNDTRIP_LOSS_PCT, DEFAULT_ROUNDTRIP_LOSS_PCT)
-        )
+        battery_kwh = float(battery_size_kwh) if battery_size_kwh and battery_size_kwh > 0 else 0.0
 
         slots = self._build_slots()
         if not slots:
@@ -835,174 +821,53 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         slot_duration_h = self._slot_duration_from_slots(slots)
         current_time = now()
 
-        has_battery = bool(battery_size_kwh and battery_size_kwh > 0)
-        battery_kwh = float(battery_size_kwh) if has_battery else 0.0
-        # Cap charge wattage at the configured kWp (inverter/solar limit)
-        default_wattage = min(self.settings.kwp_w, MAX_DEFAULT_WATTAGE) if has_battery else 0.0
-
-        def step(soc: float, slot: dict, action: str, action_config: dict) -> float:
-            return step_soc(
-                soc,
-                action,
-                action_config,
-                self._slot_load_w(slot),
-                slot_duration_h,
-                battery_kwh,
-                default_wattage,
-            )
-
         current_soc = self._get_current_soc()
         if current_soc is None:
             current_soc = (self.settings.min_battery + self.settings.max_battery) / 2.0
 
-        # All future slots including locked/car for simulation accuracy
-        future_slots = [
-            s
-            for s in slots
-            if (parse_datetime(s["start"]) or current_time)
-            + timedelta(hours=slot_duration_h)
-            > current_time
-        ]
-        if not future_slots:
-            await self.async_refresh()
-            return
+        # All slots that haven't ended yet, locked/car ones included so the
+        # simulation sees their effect on the battery.
+        opt_slots: list[OptimizerSlot] = []
+        for slot in slots:
+            start = parse_datetime(slot["start"]) or current_time
+            if start + timedelta(hours=slot_duration_h) <= current_time:
+                continue
+            existing = self._planning.get(slot["start"], {})
+            fixed = bool(
+                existing.get("locked") or existing.get("action") == ACTION_CAR_CHARGE
+            )
+            opt_slots.append(
+                OptimizerSlot(
+                    key=slot["start"],
+                    price=slot["price"],
+                    load_w=self._slot_load_w(slot),
+                    fixed_action=existing.get("action", ACTION_IDLE) if fixed else None,
+                    fixed_config=dict(existing.get("action_config") or {}) if fixed else {},
+                )
+            )
 
-        # ---- Phase 1: iterative charge placement --------------------------------
-        # Start with all unlocked non-car slots as 'idle'. Locked/car slots keep
-        # their existing action. Find SoC breaches and insert charges greedily.
-
-        assignments: dict[str, str] = {}
-        fixed_keys: set[str] = set()
-        for slot in future_slots:
-            key = slot["start"]
-            existing = self._planning.get(key, {})
-            if existing.get("locked") or existing.get("action") == ACTION_CAR_CHARGE:
-                assignments[key] = existing.get("action", ACTION_IDLE)
-                fixed_keys.add(key)
-            else:
-                assignments[key] = ACTION_IDLE
-
-        def simulate_trajectory() -> list[tuple[str, float]]:
-            """Return list of (start_key, soc_after) for each future slot."""
-            soc = current_soc
-            result = []
-            for slot in future_slots:
-                key = slot["start"]
-                action = assignments[key]
-                if key in fixed_keys:
-                    # Locked/car slots keep their real config (wattage, budget, ...)
-                    action_config = self._planning.get(key, {}).get("action_config") or {}
-                else:
-                    action_config = {}
-                soc = step(soc, slot, action, action_config)
-                result.append((key, soc))
-            return result
-
-        if has_battery and default_wattage > 0:
-            # Iterate: fix one breach per iteration to avoid infinite loops
-            for _ in range(len(future_slots)):
-                trajectory = simulate_trajectory()
-
-                # Find first slot where SoC drops below min
-                breach_key: str | None = None
-                for key, soc_after in trajectory:
-                    if soc_after < self.settings.min_battery:
-                        breach_key = key
-                        break
-
-                if breach_key is None:
-                    break  # No breach — done
-
-                # Find cheapest idle (optimisable) slot at or before the breach
-                breach_dt = parse_datetime(breach_key)
-                candidates = [
-                    s
-                    for s in future_slots
-                    if assignments[s["start"]] == ACTION_IDLE
-                    and s["start"] not in fixed_keys
-                    and (parse_datetime(s["start"]) or current_time) <= (breach_dt or current_time)
-                ]
-                if not candidates:
-                    break  # No slot available to charge — cannot fix this breach
-
-                best = min(candidates, key=lambda s: s["price"])
-                assignments[best["start"]] = ACTION_CHARGE
-
-        # ---- Phase 2: use_net for cheap non-charge slots ------------------------
-        # Effective cost = cheapest charge price × (1 + roundtrip_loss).
-        # This is the marginal cost of using stored energy from the cheapest
-        # charge slot. Any grid slot cheaper than this threshold is better served
-        # by using the grid directly (use_net) rather than discharging the battery.
-        charge_prices = [
-            s["price"]
-            for s in future_slots
-            if assignments.get(s["start"]) == ACTION_CHARGE
-        ]
-        effective_battery_cost = (
-            min(charge_prices) * (1 + roundtrip_loss_pct / 100.0)
-            if charge_prices
-            else 0.0
+        plan = optimize(
+            opt_slots,
+            settings=self.settings,
+            current_soc=current_soc,
+            slot_hours=slot_duration_h,
+            battery_kwh=battery_kwh,
+            # Cap charge wattage at the configured kWp (inverter/solar limit)
+            charge_wattage=(
+                min(self.settings.kwp_w, MAX_DEFAULT_WATTAGE) if battery_kwh else 0.0
+            ),
+            roundtrip_loss_pct=float(
+                cfg.get(CONF_ROUNDTRIP_LOSS_PCT, DEFAULT_ROUNDTRIP_LOSS_PCT)
+            ),
         )
 
-        # ---- Phase 3: final assignment pass ------------------------------------
-        soc = current_soc
-        for slot in future_slots:
-            key = slot["start"]
-            existing = self._planning.get(key, {})
-            is_locked = existing.get("locked", False)
-            existing_action = existing.get("action", ACTION_IDLE)
-
-            if is_locked or existing_action == ACTION_CAR_CHARGE:
-                action = existing_action
-                action_config: dict[str, Any] = dict(existing.get("action_config", {}))
-            else:
-                if assignments[key] == ACTION_CHARGE:
-                    if soc >= self.settings.max_battery:
-                        action = ACTION_IDLE
-                        action_config = {}
-                    else:
-                        predicted_soc_after = step(soc, slot, ACTION_CHARGE, {})
-                        action = ACTION_CHARGE
-                        action_config = {
-                            "wattage": default_wattage,
-                            "until_pct": round(min(predicted_soc_after, self.settings.max_battery), 1),
-                        }
-                elif slot["price"] <= effective_battery_cost or soc <= self.settings.min_battery:
-                    # Cheap slot or battery depleted → use grid, spare the battery
-                    action = ACTION_USE_NET
-                    # Solar always takes precedence when using the grid
-                    action_config = {"use_solar": True}
-                elif self.settings.allow_idle_for_optimize:
-                    # Price is above effective cost → let battery power the home
-                    if self.settings.allow_discharge:
-                        if step(soc, slot, ACTION_DISCHARGE, {}) >= self.settings.min_battery:
-                            action = ACTION_DISCHARGE
-                            action_config = {"wattage": default_wattage}
-                        else:
-                            action = ACTION_IDLE
-                            action_config = {}
-                    else:
-                        action = ACTION_IDLE
-                        action_config = {}
-                else:
-                    # allow_idle_for_optimize is off → always use grid on non-charge slots
-                    action = ACTION_USE_NET
-                    action_config = {"use_solar": True}
-
-                # Scheduled devices are treated as fixed load: the optimiser
-                # plans the battery around them, it does not move them.
-                self._planning[key] = {
-                    "action": action,
-                    "locked": False,
-                    "action_config": action_config,
-                    "devices": dict(existing.get("devices") or {}),
-                }
-
-            # Advance SoC simulation
-            soc = step(soc, slot, action, action_config)
+        for key, (action, action_config) in plan.items():
+            # Scheduled devices are treated as fixed load: the optimiser plans
+            # the battery around them, it does not move them.
+            entry = self._slot_entry(key)
+            entry.update(action=action, locked=False, action_config=action_config)
 
         await self._async_commit()
-
 
 # A config entry whose runtime_data holds its coordinator.
 type EMSConfigEntry = ConfigEntry[EMSCoordinator]
