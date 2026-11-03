@@ -58,6 +58,7 @@ _LOGGER = logging.getLogger(__name__)
 
 _UPDATE_INTERVAL = timedelta(minutes=5)
 _SAVE_DELAY_S = 2
+_PLANNING_RETENTION = timedelta(hours=48)
 
 
 class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
@@ -466,7 +467,29 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
     # DataUpdateCoordinator hook
     # ------------------------------------------------------------------
 
+    def _prune_planning(self) -> None:
+        """Drop planning entries for slots that ended long ago.
+
+        Nothing else ever removes them, so without this the store grows by a
+        day's worth of slots every day. Unparseable keys are dropped too: no
+        price slot can ever match them.
+        """
+        cutoff = now() - _PLANNING_RETENTION
+        stale = []
+        for key in self._planning:
+            ts = parse_datetime(key)
+            if ts is None:
+                stale.append(key)
+            elif ts.tzinfo is not None and ts < cutoff:
+                stale.append(key)
+        if stale:
+            for key in stale:
+                del self._planning[key]
+            _LOGGER.debug("Pruned %d old planning entries", len(stale))
+            self._async_save_planning()
+
     async def _async_update_data(self) -> list[dict[str, Any]]:
+        self._prune_planning()
         slots = self._build_slots()
 
         # Detect current-slot action change and fire event

@@ -5,15 +5,12 @@ from __future__ import annotations
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
-    DEFAULT_AVG_CONSUMPTION,
-    DEFAULT_KWP,
-    DEFAULT_MAX_BATTERY,
-    DEFAULT_MIN_BATTERY,
     DOMAIN,
     ENTITY_AVG_CONSUMPTION,
     ENTITY_KWP,
@@ -72,6 +69,11 @@ class EMSMinBatteryNumber(CoordinatorEntity[EMSCoordinator], NumberEntity, Resto
         return self.coordinator._min_battery
 
     async def async_set_native_value(self, value: float) -> None:
+        if value >= self.coordinator._max_battery:
+            raise ServiceValidationError(
+                f"Min battery ({value:g} %) must be below max battery "
+                f"({self.coordinator._max_battery:g} %)"
+            )
         self.coordinator._min_battery = value
         await self.coordinator.async_refresh()
 
@@ -109,6 +111,11 @@ class EMSMaxBatteryNumber(CoordinatorEntity[EMSCoordinator], NumberEntity, Resto
         return self.coordinator._max_battery
 
     async def async_set_native_value(self, value: float) -> None:
+        if value <= self.coordinator._min_battery:
+            raise ServiceValidationError(
+                f"Max battery ({value:g} %) must be above min battery "
+                f"({self.coordinator._min_battery:g} %)"
+            )
         self.coordinator._max_battery = value
         await self.coordinator.async_refresh()
 
