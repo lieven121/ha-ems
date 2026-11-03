@@ -130,6 +130,12 @@ header span{font-family:var(--code-font-family, monospace);font-size:10px;color:
 /* Popup mini nav bar */
 .pop-nav-wrap{padding:10px 16px 12px;border-bottom:1px solid var(--border);}
 .pop-nav-label{font-family:var(--code-font-family, monospace);font-size:8px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;}
+.pop-nav-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;}
+.pop-nav-head .pop-nav-label{margin-bottom:0;}
+.pop-day-btns{display:flex;gap:4px;}
+.pop-day-btn{background:none;border:1px solid var(--border);color:var(--text-dim);border-radius:5px;padding:2px 8px;cursor:pointer;font-family:var(--code-font-family, monospace);font-size:9px;text-transform:uppercase;letter-spacing:.06em;transition:all .12s;}
+.pop-day-btn:hover{border-color:var(--text-bright);color:var(--text-bright);}
+.pop-day-btn.active{border-color:var(--accent);color:var(--accent);cursor:default;}
 .pop-nav-track{position:relative;height:14px;border-radius:3px;overflow:visible;cursor:pointer;user-select:none;}
 .pop-nav-segs{display:flex;height:100%;border-radius:3px;overflow:hidden;}
 .pop-nav-seg{flex:1;height:100%;}
@@ -897,7 +903,12 @@ function renderPopup(ctx) {
     </div>
 
     <div class="pop-nav-wrap">
-      <div class="pop-nav-label">Jump to slot</div>
+      <div class="pop-nav-head">
+        <div class="pop-nav-label">Jump to slot</div>
+        ${ctx.days.length > 1 ? `<div class="pop-day-btns">${ctx.days.map(
+    (d, di) => `<button class="pop-day-btn${d.active ? " active" : ""}" data-day="${di}">${esc(d.label)}</button>`
+  ).join("")}</div>` : ""}
+      </div>
       <div class="pop-nav-track" id="pop-nav-track">
         <div class="pop-nav-segs">${navSegs}</div>
         <div class="pop-nav-dots">${navDots}</div>
@@ -966,6 +977,12 @@ function renderPopup(ctx) {
   sr.getElementById("pop-next").addEventListener("click", (e) => {
     e.stopPropagation();
     ctx.onNavigate(i + 1);
+  });
+  sr.querySelectorAll(".pop-day-btn[data-day]").forEach((el) => {
+    el.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (!el.classList.contains("active")) ctx.onSwitchDay(+el.dataset.day);
+    });
   });
   sr.querySelectorAll(".pop-nav-seg").forEach((el) => {
     el.addEventListener("click", (e) => {
@@ -1945,12 +1962,14 @@ var EmsDashboardCard = class extends HTMLElement {
     }
     this._days = Object.keys(groups).sort().map((k) => ({ date: k, slots: groups[k] }));
     const fixedDay = this._config.layout?.day;
-    if (fixedDay) {
+    if (fixedDay && this._activeIdx == null) {
       const today = localDateStr(/* @__PURE__ */ new Date());
       const tomorrow = localDateStr(new Date(Date.now() + 864e5));
       const target = fixedDay === "tomorrow" ? tomorrow : today;
       const idx = this._days.findIndex((d) => d.date === target);
       this._dayIdx = idx >= 0 ? idx : 0;
+    } else if (fixedDay) {
+      this._dayIdx = Math.min(Math.max(this._dayIdx, 0), Math.max(0, this._days.length - 1));
     } else {
       const today = localDateStr(/* @__PURE__ */ new Date());
       const todayIdx = this._days.findIndex((d) => d.date === today);
@@ -2292,7 +2311,43 @@ var EmsDashboardCard = class extends HTMLElement {
     this.shadowRoot.getElementById("overlay").classList.remove("open");
     this.shadowRoot.querySelectorAll(".slot").forEach((el) => el.classList.remove("hl"));
     this._activeIdx = null;
+    if (this._config.layout?.day) {
+      const before = this._dayIdx;
+      this._parseData();
+      if (this._dayIdx !== before) {
+        this._render();
+        return;
+      }
+    }
     this._renderBrush();
+  }
+  /** Switch the day from the slot dialog, keeping the same time of day. */
+  _switchDay(dayIdx) {
+    const day = this._days[dayIdx];
+    if (!day) return;
+    const cur = this._activeIdx != null ? this._filteredSlots[this._activeIdx] : void 0;
+    const timeOfDay = (s) => {
+      const d = new Date(s.start ?? s.time);
+      return d.getHours() * 60 + d.getMinutes();
+    };
+    let target = Math.min(this._activeIdx ?? 0, day.slots.length - 1);
+    if (cur) {
+      const want = timeOfDay(cur);
+      let best = Infinity;
+      day.slots.forEach((s, i) => {
+        const diff = Math.abs(timeOfDay(s) - want);
+        if (diff < best) {
+          best = diff;
+          target = i;
+        }
+      });
+    }
+    this._dayIdx = dayIdx;
+    this._filteredSlots = day.slots;
+    this._buildDevColors();
+    this._activeIdx = target;
+    this._render();
+    this._navigateSlot(target);
   }
   _navigateSlot(i) {
     if (i < 0 || i >= this._filteredSlots.length) return;
@@ -2318,8 +2373,18 @@ var EmsDashboardCard = class extends HTMLElement {
       devColors: this._devColors,
       onClose: () => this._closePopup(),
       onNavigate: (j) => this._navigateSlot(j),
-      onBulkEdit: () => this._openBulkEdit(i)
+      onBulkEdit: () => this._openBulkEdit(i),
+      days: this._dayLabels(),
+      onSwitchDay: (d) => this._switchDay(d)
     });
+  }
+  _dayLabels() {
+    const today = localDateStr(/* @__PURE__ */ new Date());
+    const tomorrow = localDateStr(new Date(Date.now() + 864e5));
+    return this._days.map((d, i) => ({
+      label: d.date === today ? "Today" : d.date === tomorrow ? "Tomorrow" : d.date,
+      active: i === this._dayIdx
+    }));
   }
   _openBulkEdit(fromIdx) {
     this._activeIdx = fromIdx;
