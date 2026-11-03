@@ -24,6 +24,8 @@ export interface Slot {
   action_config?: Record<string, any>;
   car?: Record<string, any>;
   battery_prediction?: number | null;
+  solar_w?: number | null;     // forecast PV output (W)
+  load_w?: number | null;      // predicted house load incl. scheduled devices (W)
   battery_manual_override_w?: number;
   devices?: Array<{ name: string; control?: DeviceControl; mode?: string | null; manual_override_w?: number | null; allocated_wattage_w?: number | null }>;
 }
@@ -51,6 +53,7 @@ export interface CardConfig {
     day?: 'today' | 'tomorrow';
     show_stats?: boolean;
     show_brush?: boolean;
+    show_forecast?: boolean;   // solar forecast + predicted load behind the bars
     show_header?: boolean;
     show_chart?: boolean;
     show_actions?: boolean;

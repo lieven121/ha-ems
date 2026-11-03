@@ -36,6 +36,7 @@ export const EDITOR_SCHEMA = [
       { name: 'show_price_legend',  selector: { boolean: {} } },
       { name: 'show_action_legend', selector: { boolean: {} } },
       { name: 'show_battery',       selector: { boolean: {} } },
+      { name: 'show_forecast',      selector: { boolean: {} } },
     ],
   },
   {
@@ -77,6 +78,7 @@ export function editorLabel(schema: any): string {
     show_price_legend:     'Show Price Legend',
     show_action_legend:    'Show Action Legend',
     show_battery:          'Show Battery Line',
+    show_forecast:         'Show Solar & Load Forecast',
     day:                   'Fixed Day',
     device_id:             'EMS Device',
     battery_entity:        'Current Battery Entity',
@@ -105,6 +107,7 @@ export function editorHelper(schema: any): string {
     battery_entity:      'Number or sensor entity for current battery state of charge (0–100). Used to draw the current battery % line on the chart.',
     battery_line_color:  'Color for the battery overlay lines. Defaults to a teal/cyan color.',
     show_battery:        'Overlay current (solid) and predicted (dashed) battery % on the chart (default: true when battery_entity is set).',
+    show_forecast:       'Shade the solar forecast (yellow) and draw the predicted house load (purple) behind the price bars (default: true).',
   } as Record<string, string>)[schema.name] ?? '';
 }
 

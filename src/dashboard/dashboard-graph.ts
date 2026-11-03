@@ -176,18 +176,19 @@ export function renderBatteryOverlay(
   const enabled     = config.layout?.show_battery !== false && n > 0;
   const showPred    = enabled && predPoints.length > 1;
   const showCurrent = enabled && currentPct != null;
+  const forecastSvg = renderForecast(slots, config);
 
   const lineColor = rgbToCss(config.integration?.battery_line_color, '#06b6d4');
 
   if (battSvg) {
-    if (showPred || showCurrent) {
+    if (showPred || showCurrent || forecastSvg) {
       // preserveAspectRatio="none" stretches x by chartWidth/100 while leaving y
       // at 1x, so only geometry that tolerates that distortion may live in here.
       // Text belongs in the HTML axis column below.
       battSvg.setAttribute('viewBox', `0 0 100 ${CHART_H}`);
       battSvg.setAttribute('preserveAspectRatio', 'none');
 
-      let svgContent = '';
+      let svgContent = forecastSvg;
       if (showPred) {
         const pathD = predPoints.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x} ${p.y}`).join(' ');
         svgContent += `<path d="${pathD}" fill="none" stroke="${lineColor}" stroke-width="2" stroke-dasharray="5 4" opacity="0.95" vector-effect="non-scaling-stroke"/>`;
@@ -225,6 +226,33 @@ export function renderBatteryOverlay(
       battAxis.setAttribute('hidden', '');
     }
   }
+}
+
+/** Solar forecast (filled) and predicted house load (thin line), both
+ *  scaled to the larger of the two so they compare at a glance. They sit
+ *  behind the battery line; hide them with layout.show_forecast: false. */
+function renderForecast(slots: Slot[], config: CardConfig): string {
+  const n = slots.length;
+  if (n === 0 || config.layout?.show_forecast === false) return '';
+  const solar = slots.map(s => Math.max(0, s.solar_w ?? 0));
+  const load  = slots.map(s => Math.max(0, s.load_w ?? 0));
+  const peak  = Math.max(...solar, ...load);
+  if (!(peak > 0)) return '';
+  // Leave the top tenth free so the curves don't collide with the header.
+  const y = (w: number) => (CHART_H - w / peak * CHART_H * 0.9).toFixed(1);
+  const x = (i: number) => ((i + 0.5) / n * 100).toFixed(2);
+
+  let out = '';
+  if (solar.some(w => w > 0)) {
+    const top = solar.map((w, i) => `L${x(i)} ${y(w)}`).join(' ');
+    out += `<path d="M${x(0)} ${CHART_H} ${top} L${x(n - 1)} ${CHART_H} Z" fill="#facc15" opacity="0.22" stroke="none"/>`;
+    out += `<path d="${top.replace(/^L/, 'M')}" fill="none" stroke="#eab308" stroke-width="1" opacity="0.8" vector-effect="non-scaling-stroke"/>`;
+  }
+  if (load.some(w => w > 0)) {
+    const line = load.map((w, i) => `${i === 0 ? 'M' : 'L'}${x(i)} ${y(w)}`).join(' ');
+    out += `<path d="${line}" fill="none" stroke="#a855f7" stroke-width="1" opacity="0.7" vector-effect="non-scaling-stroke"/>`;
+  }
+  return out;
 }
 
 export function renderBrush(

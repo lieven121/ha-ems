@@ -186,6 +186,8 @@ export class EmsDashboardCard extends HTMLElement {
             car:                p.car           ?? slot.car,
             devices:            p.devices       ?? slot.devices,
             battery_prediction: p.battery_prediction ?? slot.battery_prediction,
+            solar_w:            p.solar_w       ?? slot.solar_w,
+            load_w:             p.load_w        ?? slot.load_w,
             price:     slot.price || p.price || 0,
             _injPrice: slot._injPrice || p.injection_price || 0,
           };
