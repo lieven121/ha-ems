@@ -1,6 +1,7 @@
 {
   "domain": "ha_ems",
   "name": "Home Assistant Energy Management System",
+  "after_dependencies": ["energy", "recorder"],
   "codeowners": ["@lieven121"],
   "config_flow": true,
   "documentation": "https://github.com/lieven121/HA-EMS",
