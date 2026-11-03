@@ -1,4 +1,10 @@
-"""Tests for the battery planning optimiser."""
+"""Tests for the cost-minimising battery planner."""
+
+import itertools
+import random
+import time
+
+import pytest
 
 from ha_ems.const import (
     ACTION_CAR_CHARGE,
@@ -8,26 +14,34 @@ from ha_ems.const import (
     ACTION_USE_NET,
 )
 from ha_ems.models import EMSSettings
-from ha_ems.optimizer import OptimizerSlot, optimize
+from ha_ems.optimizer import OptimizerSlot, optimize, terminal_price
+from ha_ems.simulation import one_way_efficiency, simulate_slot
 
-# 10 kWh battery, 1 h slots, 1000 W load: each idle slot drains 10 % SoC.
+# 10 kWh battery, 1 h slots, 1000 W load: an idle slot drains 10 % SoC.
 LOAD_W = 1000.0
+KWH = 10.0
 
 
-def slots(prices, **fixed):
-    """Build slots s0, s1, ... with the given prices; fixed={index: (action, cfg)}."""
+def slots(prices, solar=None, load=LOAD_W, inj=None, **fixed):
+    """Build slots s0, s1, ...; fixed={"s<i>": (action, cfg)}."""
     out = []
     for i, price in enumerate(prices):
         action, cfg = fixed.get(f"s{i}", (None, {}))
         out.append(
             OptimizerSlot(
-                key=f"s{i}", price=price, load_w=LOAD_W, fixed_action=action, fixed_config=cfg
+                key=f"s{i}",
+                price=price,
+                load_w=load,
+                solar_w=(solar or [0] * len(prices))[i],
+                injection_price=inj,
+                fixed_action=action,
+                fixed_config=cfg,
             )
         )
     return out
 
 
-def run(opt_slots, *, soc=50.0, battery_kwh=10.0, charge_w=3000.0, loss=20.0, **settings):
+def run(opt_slots, *, soc=50.0, battery_kwh=KWH, charge_w=3000.0, loss=0.0, **settings):
     return optimize(
         opt_slots,
         settings=EMSSettings(**{"min_battery": 10.0, "max_battery": 95.0, **settings}),
@@ -43,83 +57,191 @@ def actions(plan):
     return [plan[k][0] for k in sorted(plan, key=lambda k: int(k[1:]))]
 
 
-def test_no_breach_means_no_charging():
-    # 50 % with three 10 % slots never gets near the 10 % floor.
-    plan = run(slots([30, 20, 25]))
+def replay(opt_slots, plan, *, soc=50.0, charge_w=3000.0, loss=0.0):
+    """Simulate a plan: return (grid cost, SoC after every slot)."""
+    eta = one_way_efficiency(loss)
+    cost, socs = 0.0, []
+    for slot in opt_slots:
+        if slot.is_fixed:
+            action, cfg = slot.fixed_action, slot.fixed_config
+        else:
+            action, cfg = plan[slot.key]
+        res = simulate_slot(
+            soc,
+            action,
+            cfg,
+            slot.load_w,
+            1.0,
+            KWH,
+            solar_w=slot.solar_w,
+            default_wattage=charge_w,
+            max_charge_w=charge_w,
+            efficiency=eta,
+        )
+        cost += res.import_kwh * slot.price - res.export_kwh * (slot.injection_price or 0)
+        soc = res.soc
+        socs.append(soc)
+    return cost, socs
+
+
+def test_empty_input():
+    assert run([]) == {}
+
+
+def test_charges_in_cheap_slots_to_cover_expensive_ones():
+    plan = run(slots([30, 5, 5, 40, 40, 40, 40, 40]), soc=20)
+    acts = actions(plan)
+    assert ACTION_CHARGE in acts[1:3]
+    assert ACTION_CHARGE not in acts[3:]
+    # The expensive hours run on the battery.
+    assert acts[3:] == [ACTION_IDLE] * 5
+
+
+def test_never_plans_below_min_battery():
+    rng = random.Random(1)
+    for _ in range(30):
+        opt = slots([rng.uniform(0, 40) for _ in range(12)])
+        plan = run(opt, soc=30)
+        _, socs = replay(opt, plan, soc=30)
+        assert min(socs) >= 10 - 0.5
+
+
+def test_charge_config_has_wattage_and_target():
+    plan = run(slots([30, 5, 40, 40, 40, 40]), soc=12)
+    action, cfg = plan["s1"]
+    assert action == ACTION_CHARGE
+    assert cfg["wattage"] == 3000
+    assert 10 < cfg["until_pct"] <= 95
+
+
+def test_solar_replaces_grid_charging():
+    # Cheap night, a sunny midday with plenty of surplus, an expensive
+    # evening. Charging at night would be wasted: the sun fills the battery.
+    prices = [10, 10, 30, 30, 30, 30, 50, 50]
+    solar = [0, 0, 4000, 4000, 4000, 0, 0, 0]
+    plan = run(slots(prices, solar=solar), soc=50)
+    assert ACTION_CHARGE not in actions(plan)[:2]
+    # Midday runs idle so the surplus goes into the battery.
+    assert actions(plan)[2:5] == [ACTION_IDLE] * 3
+
+
+def test_flat_prices_do_nothing_silly():
+    plan = run(slots([20] * 6), soc=60, loss=20)
     assert ACTION_CHARGE not in actions(plan)
-    # No charge price, so the effective battery cost is 0 and every slot idles.
-    assert actions(plan) == [ACTION_IDLE] * 3
+    assert ACTION_DISCHARGE not in actions(plan)
 
 
-def test_breach_promotes_cheapest_slot_before_it():
-    # From 30 %, the third slot would end at 0 % (< 10 %). The cheapest slot
-    # at or before that breach is s1; the cheaper s4 comes too late.
-    plan = run(slots([30, 5, 25, 40, 1]), soc=30)
-    assert plan["s1"][0] == ACTION_CHARGE
-    assert plan["s4"][0] != ACTION_CHARGE
-    assert plan["s1"][1]["wattage"] == 3000
-
-
-def test_charge_sets_until_pct_to_predicted_soc():
-    plan = run(slots([30, 5, 25]), soc=30)
-    # s0 idle: 30 -> 20; s1 charge: 20 + 30 = 50 (the load runs on the grid)
-    assert plan["s1"][1]["until_pct"] == 50.0
-
-
-def test_cheap_slots_use_the_grid():
-    # Charging at 5 makes stored energy cost 5 * 1.2 = 6, so a slot priced 6
-    # or below should use the grid directly and anything dearer the battery.
-    plan = run(slots([30, 5, 25, 6, 50]), soc=30)
-    assert plan["s3"][0] == ACTION_USE_NET
-    assert plan["s3"][1] == {"use_solar": True}
-    assert plan["s4"][0] in (ACTION_IDLE, ACTION_USE_NET)
+def test_losses_make_small_spreads_not_worth_it():
+    # Charging at 20 to save 22 loses money with 20 % round-trip loss.
+    plan = run(slots([20, 22, 22, 22]), soc=40, loss=20)
+    assert ACTION_CHARGE not in actions(plan)
 
 
 def test_fixed_slots_are_simulated_but_not_replanned():
     locked = (ACTION_USE_NET, {"use_solar": True})
     plan = run(slots([30, 20, 25], s1=locked))
-    assert "s1" not in plan
     assert set(plan) == {"s0", "s2"}
 
 
 def test_car_slot_with_negative_budget_counts_as_charging():
-    # From 30 %, s2 would breach; but the car slot s1 charges the house
-    # battery at 3 kW, so no extra charge slot is needed.
+    # The car slot charges the house battery at 3 kW, so no extra grid
+    # charging is needed for the expensive slots after it.
     car = (ACTION_CAR_CHARGE, {"use_battery_wattage": -3000})
-    plan = run(slots([30, 20, 25, 25], s1=car), soc=30)
+    plan = run(slots([30, 20, 40, 40], s1=car), soc=15)
     assert ACTION_CHARGE not in actions(plan)
 
 
-def test_without_idle_everything_else_uses_the_grid():
+def test_without_idle_non_charge_slots_use_the_grid():
     plan = run(slots([30, 20, 25]), allow_idle_for_optimize=False)
+    assert ACTION_IDLE not in actions(plan)
+
+
+def test_discharge_only_when_allowed_and_paid():
+    plan = run(slots([10, 10, 10], inj=50), soc=90)
+    assert ACTION_DISCHARGE not in actions(plan)
+    plan = run(slots([10, 10, 10], inj=50), soc=90, allow_discharge=True)
+    assert ACTION_DISCHARGE in actions(plan)
+
+
+def test_no_battery_uses_the_grid():
+    plan = run(slots([30, 5, 25]), battery_kwh=0)
     assert actions(plan) == [ACTION_USE_NET] * 3
 
 
-def test_discharge_when_allowed_and_affordable():
-    # 90 %: discharging 3 kW + 1 kW load costs 40 % a slot.
-    plan = run(slots([30, 40]), soc=90, allow_discharge=True)
-    assert plan["s0"][0] == ACTION_DISCHARGE  # 90 -> 50, stays above 10
-    assert plan["s1"][0] == ACTION_DISCHARGE  # 50 -> 10, exactly at the floor
-    # Starting at 70 %, s1 is reached at 30 %: discharging would end at -10 %,
-    # so it idles instead (30 -> 20).
-    plan = run(slots([30, 40]), soc=70, allow_discharge=True)
-    assert plan["s1"] == (ACTION_IDLE, {})
-    # And a slot reached at the floor uses the grid to spare the battery.
-    plan = run(slots([30, 40, 50]), soc=90, allow_discharge=True)
-    assert plan["s2"] == (ACTION_USE_NET, {"use_solar": True})
+def test_terminal_price_is_cheapest_quarter():
+    assert terminal_price(slots([1, 2, 3, 4, 10, 20, 30, 40])) == pytest.approx(1.5)
 
 
-def test_battery_already_full_skips_the_charge():
-    # From 95 %, nine idle slots would end at 5 %, so phase 1 picks the
-    # cheapest slot, s0. But s0 starts at max_battery, so it idles instead.
-    plan = run(slots([1] + [30] * 8), soc=95, max_battery=95)
-    assert plan["s0"] == (ACTION_IDLE, {})
+def test_at_least_as_good_as_brute_force():
+    # Small horizon: try every idle / use_net / full-charge sequence.
+    rng = random.Random(7)
+    choices = [
+        (ACTION_IDLE, {}),
+        (ACTION_USE_NET, {}),
+        (ACTION_CHARGE, {"wattage": 3000, "until_pct": 95}),
+    ]
+    for _ in range(10):
+        opt = slots([rng.uniform(0, 40) for _ in range(5)])
+        tp = terminal_price(opt)
+
+        def total(plan, opt=opt, tp=tp):
+            cost, socs = replay(opt, plan, soc=40)
+            return cost - socs[-1] / 100 * KWH * tp, min(socs)
+
+        dp_total, _ = total(run(opt, soc=40))
+        best = min(
+            t
+            for combo in itertools.product(choices, repeat=5)
+            for t, low in [total({f"s{i}": c for i, c in enumerate(combo)})]
+            if low >= 10
+        )
+        assert dp_total <= best + 0.05
 
 
-def test_no_battery_plans_no_charging():
-    plan = run(slots([30, 5, 25]), soc=30, battery_kwh=0, charge_w=0)
-    assert ACTION_CHARGE not in actions(plan)
+def test_fast_enough_for_two_days_of_quarter_hours():
+    rng = random.Random(3)
+    opt = [
+        OptimizerSlot(key=f"s{i}", price=rng.uniform(0, 40), load_w=400, solar_w=0)
+        for i in range(192)
+    ]
+    start = time.perf_counter()
+    optimize(
+        opt,
+        settings=EMSSettings(allow_discharge=True),
+        current_soc=50,
+        slot_hours=0.25,
+        battery_kwh=10,
+        charge_wattage=3000,
+        roundtrip_loss_pct=20,
+    )
+    elapsed = time.perf_counter() - start
+    print(f"192 slots: {elapsed:.2f}s")
+    assert elapsed < 5
 
 
-def test_empty_input():
-    assert run([]) == {}
+def test_fast_model_matches_simulation():
+    """The DP's arithmetic must agree with simulate_slot for every option."""
+    from ha_ems.optimizer import _Model
+
+    rng = random.Random(11)
+    settings = EMSSettings(min_battery=10, max_battery=95, allow_discharge=True)
+    for _ in range(300):
+        model = _Model(
+            settings=settings,
+            slot_hours=rng.choice([0.25, 1.0]),
+            battery_kwh=rng.uniform(3, 20),
+            charge_wattage=rng.uniform(500, 6000),
+            efficiency=one_way_efficiency(rng.uniform(0, 30)),
+        )
+        slot = OptimizerSlot(
+            key="x",
+            price=rng.uniform(-5, 40),
+            load_w=rng.uniform(0, 3000),
+            solar_w=rng.choice([0, rng.uniform(0, 6000)]),
+            injection_price=rng.uniform(0, 10),
+        )
+        soc = rng.uniform(0, 100)
+        for action, cfg, end_soc, cost in model.options(slot, soc):
+            _, _, sim_soc, sim_cost = model.simulate(slot, soc, action, cfg)
+            assert end_soc == pytest.approx(sim_soc, abs=1e-6), (action, cfg)
+            assert cost == pytest.approx(sim_cost, abs=1e-6), (action, cfg)
