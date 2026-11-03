@@ -62,12 +62,22 @@ def step_soc(
         return watts * slot_hours / (battery_kwh * 1000) * 100
 
     wattage = _as_float(action_config.get("wattage"), default_wattage)
+    until_raw = action_config.get("until_pct")
+    until = _as_float(until_raw) if until_raw is not None else None
 
     if action == ACTION_CHARGE:
-        return clamp_soc(soc + pct(wattage) - pct(load_w))
+        if until is not None and soc >= until:
+            # Target already reached: the battery stops charging and the slot
+            # behaves like idle.
+            return clamp_soc(soc - pct(load_w))
+        result = clamp_soc(soc + pct(wattage) - pct(load_w))
+        return min(result, until) if until is not None else result
 
     if action == ACTION_DISCHARGE:
-        return clamp_soc(soc - pct(wattage) - pct(load_w))
+        if until is not None and soc <= until:
+            return clamp_soc(soc - pct(load_w))
+        result = clamp_soc(soc - pct(wattage) - pct(load_w))
+        return max(result, until) if until is not None else result
 
     if action == ACTION_USE_NET:
         # Using grid directly — but if max_wattage is capped below the slot
