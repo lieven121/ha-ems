@@ -37,6 +37,9 @@ export interface DialogContext {
   onClose: () => void;
   onNavigate: (i: number) => void;
   onBulkEdit: () => void;
+  /** Days the dialog can switch between; hidden when there is only one. */
+  days: { label: string; active: boolean }[];
+  onSwitchDay: (dayIdx: number) => void;
 }
 
 export function renderPopup(ctx: DialogContext): void {
@@ -244,7 +247,12 @@ export function renderPopup(ctx: DialogContext): void {
     </div>
 
     <div class="pop-nav-wrap">
-      <div class="pop-nav-label">Jump to slot</div>
+      <div class="pop-nav-head">
+        <div class="pop-nav-label">Jump to slot</div>
+        ${ctx.days.length > 1 ? `<div class="pop-day-btns">${ctx.days.map((d, di) =>
+          `<button class="pop-day-btn${d.active ? ' active' : ''}" data-day="${di}">${esc(d.label)}</button>`
+        ).join('')}</div>` : ''}
+      </div>
       <div class="pop-nav-track" id="pop-nav-track">
         <div class="pop-nav-segs">${navSegs}</div>
         <div class="pop-nav-dots">${navDots}</div>
@@ -309,6 +317,12 @@ export function renderPopup(ctx: DialogContext): void {
   sr.getElementById('pop-prev')!.addEventListener('click', (e: Event) => { e.stopPropagation(); ctx.onNavigate(i-1); });
   sr.getElementById('pop-next')!.addEventListener('click', (e: Event) => { e.stopPropagation(); ctx.onNavigate(i+1); });
 
+  sr.querySelectorAll('.pop-day-btn[data-day]').forEach(el => {
+    el.addEventListener('click', (e: Event) => {
+      e.stopPropagation();
+      if (!el.classList.contains('active')) ctx.onSwitchDay(+(el as HTMLElement).dataset.day!);
+    });
+  });
   sr.querySelectorAll('.pop-nav-seg').forEach(el => {
     el.addEventListener('click', (e: Event) => { e.stopPropagation(); ctx.onNavigate(+(el as HTMLElement).dataset.i!); });
   });

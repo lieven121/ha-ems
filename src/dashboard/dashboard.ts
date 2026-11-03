@@ -208,12 +208,15 @@ export class EmsDashboardCard extends HTMLElement {
     this._days = Object.keys(groups).sort().map(k => ({ date: k, slots: groups[k] }));
 
     const fixedDay = this._config.layout?.day;
-    if (fixedDay) {
+    if (fixedDay && this._activeIdx == null) {
       const today    = localDateStr(new Date());
       const tomorrow = localDateStr(new Date(Date.now() + 86400000));
       const target   = fixedDay === 'tomorrow' ? tomorrow : today;
       const idx      = this._days.findIndex(d => d.date === target);
       this._dayIdx   = idx >= 0 ? idx : 0;
+    } else if (fixedDay) {
+      // The slot dialog switched days; stay there until it closes.
+      this._dayIdx = Math.min(Math.max(this._dayIdx, 0), Math.max(0, this._days.length - 1));
     } else {
       const today    = localDateStr(new Date());
       const todayIdx = this._days.findIndex(d => d.date === today);
@@ -585,7 +588,39 @@ export class EmsDashboardCard extends HTMLElement {
     this.shadowRoot!.getElementById('overlay')!.classList.remove('open');
     this.shadowRoot!.querySelectorAll('.slot').forEach(el => el.classList.remove('hl'));
     this._activeIdx = null;
+    if (this._config.layout?.day) {
+      // A fixed-day card goes back to its own day after switching in the dialog.
+      const before = this._dayIdx;
+      this._parseData();
+      if (this._dayIdx !== before) { this._render(); return; }
+    }
     this._renderBrush();
+  }
+
+  /** Switch the day from the slot dialog, keeping the same time of day. */
+  _switchDay(dayIdx: number) {
+    const day = this._days[dayIdx];
+    if (!day) return;
+    const cur = this._activeIdx != null ? this._filteredSlots[this._activeIdx] : undefined;
+    const timeOfDay = (s: Slot) => {
+      const d = new Date(s.start ?? s.time!);
+      return d.getHours() * 60 + d.getMinutes();
+    };
+    let target = Math.min(this._activeIdx ?? 0, day.slots.length - 1);
+    if (cur) {
+      const want = timeOfDay(cur);
+      let best = Infinity;
+      day.slots.forEach((s, i) => {
+        const diff = Math.abs(timeOfDay(s) - want);
+        if (diff < best) { best = diff; target = i; }
+      });
+    }
+    this._dayIdx        = dayIdx;
+    this._filteredSlots = day.slots;
+    this._buildDevColors();
+    this._activeIdx     = target;
+    this._render();
+    this._navigateSlot(target);
   }
 
   _navigateSlot(i: number) {
@@ -614,7 +649,18 @@ export class EmsDashboardCard extends HTMLElement {
       onClose: () => this._closePopup(),
       onNavigate: (j) => this._navigateSlot(j),
       onBulkEdit: () => this._openBulkEdit(i),
+      days: this._dayLabels(),
+      onSwitchDay: (d) => this._switchDay(d),
     });
+  }
+
+  _dayLabels(): { label: string; active: boolean }[] {
+    const today    = localDateStr(new Date());
+    const tomorrow = localDateStr(new Date(Date.now() + 86400000));
+    return this._days.map((d, i) => ({
+      label:  d.date === today ? 'Today' : d.date === tomorrow ? 'Tomorrow' : d.date,
+      active: i === this._dayIdx,
+    }));
   }
 
   _openBulkEdit(fromIdx: number) {

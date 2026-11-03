@@ -129,6 +129,12 @@ header span{font-family:var(--code-font-family, monospace);font-size:10px;color:
 /* Popup mini nav bar */
 .pop-nav-wrap{padding:10px 16px 12px;border-bottom:1px solid var(--border);}
 .pop-nav-label{font-family:var(--code-font-family, monospace);font-size:8px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;}
+.pop-nav-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;}
+.pop-nav-head .pop-nav-label{margin-bottom:0;}
+.pop-day-btns{display:flex;gap:4px;}
+.pop-day-btn{background:none;border:1px solid var(--border);color:var(--text-dim);border-radius:5px;padding:2px 8px;cursor:pointer;font-family:var(--code-font-family, monospace);font-size:9px;text-transform:uppercase;letter-spacing:.06em;transition:all .12s;}
+.pop-day-btn:hover{border-color:var(--text-bright);color:var(--text-bright);}
+.pop-day-btn.active{border-color:var(--accent);color:var(--accent);cursor:default;}
 .pop-nav-track{position:relative;height:14px;border-radius:3px;overflow:visible;cursor:pointer;user-select:none;}
 .pop-nav-segs{display:flex;height:100%;border-radius:3px;overflow:hidden;}
 .pop-nav-seg{flex:1;height:100%;}

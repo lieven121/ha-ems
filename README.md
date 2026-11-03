@@ -92,6 +92,7 @@ device_id: <your_ems_device_id>
 | 24 h brush | Compact timeline — click to jump |
 | Slot popup | Edit any slot's action and parameters inline |
 | Keyboard nav | ← / → to step; Esc to close |
+| Day switch | Today / Tomorrow buttons in the slot dialog; switching keeps the time of day |
 | Solar & load | Solar forecast (yellow) and predicted house load (purple) behind the bars; `layout.show_forecast: false` hides them |
 | Locking | Edits made in the slot editor or bulk edit are locked by default (untick to leave them to the optimizer); bulk edit also has Lock / Unlock buttons |
 
