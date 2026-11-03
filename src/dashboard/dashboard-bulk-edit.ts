@@ -480,7 +480,7 @@ export function renderBulkEdit(ctx: BulkEditContext): void {
     if (matched.length === 0) return;
 
     applyBtn.disabled = true;
-    applyBtn.textContent = `Applying… (0/${matched.length})`;
+    applyBtn.textContent = `Applying to ${matched.length} slots…`;
 
     const commonBase = { device_id: deviceId || entryId };
     const numVal = (id: string, fallback: number) => {
@@ -493,63 +493,54 @@ export function renderBulkEdit(ctx: BulkEditContext): void {
     };
 
     try {
-      for (let mi = 0; mi < matched.length; mi++) {
-        const slot = slots[matched[mi]];
-        const slotTime = slot.start ?? slot.time;
-        const commonData = { ...commonBase, time: slotTime, locked: true };
-
-        // Primary action
-        if (selAction === 'idle') {
-          await hass.callService('ha_ems', 'planning_idle', commonData);
-        } else if (selAction === 'charge') {
-          const untilPct = optNumVal('be-charge-until');
-          await hass.callService('ha_ems', 'planning_charge',
-            { ...commonData, wattage: numVal('be-charge-w', kwpW), ...(untilPct != null ? { until_pct: untilPct } : {}) });
-        } else if (selAction === 'discharge') {
-          const untilPct = optNumVal('be-discharge-until');
-          await hass.callService('ha_ems', 'planning_discharge',
-            { ...commonData, wattage: numVal('be-discharge-w', kwpW), ...(untilPct != null ? { until_pct: untilPct } : {}) });
-        } else if (selAction === 'use_net') {
-          const maxWatts = optNumVal('be-usenet-max');
-          const useSolar = sr.getElementById('be-usenet-solar')?.classList.contains('on') ?? true;
-          await hass.callService('ha_ems', 'planning_use_net',
-            { ...commonData, use_solar: useSolar, ...(maxWatts != null ? { max_wattage: maxWatts } : {}) });
-        } else if (selAction === 'car_charge') {
-          const useSolar = sr.getElementById('be-car-solar')?.classList.contains('on') ?? true;
-          const netCardOn = sr.getElementById('be-wc-car-net')?.classList.contains('on') ?? false;
-          const batCardOn = sr.getElementById('be-wc-car-bat')?.classList.contains('on') ?? false;
-          const batUntil = batCardOn ? optNumVal('be-car-bat-until') : null;
-          await hass.callService('ha_ems', 'planning_car_charge_slot', {
-            ...commonData,
-            use_solar: useSolar,
-            use_net_wattage: netCardOn ? numVal('be-car-net-w', 0) : 0,
-            use_battery_wattage: batCardOn ? numVal('be-car-bat-w', 0) : 0,
-            ...(batUntil != null ? { use_battery_until_pct: batUntil } : {}),
-          });
-        }
-
-        // Device scheduling
-        for (const d of devicesAvailable) {
-          const intent = deviceIntents[d.name];
-          if (intent === 'ignore') continue;
-          // Shape the payload to how the device is controlled: a wattage, a
-          // mode, or nothing at all for plain on/off devices.
-          let params: Record<string, any> = {};
-          if (intent === 'on' && d.control === 'modes') {
-            const mode = deviceMode[d.name];
-            if (mode) params = { mode };
-          } else if (intent === 'on' && d.control !== 'switch') {
-            params = { wattage: deviceWattage[d.name] };
-          }
-          await hass.callService(
-            'ha_ems',
-            intent === 'on' ? 'planning_device_slot' : 'planning_device_clear',
-            { ...commonBase, time: slotTime, device_name: d.name, ...params },
-          );
-        }
-
-        applyBtn.textContent = `Applying… (${mi + 1}/${matched.length})`;
+      // Read the form once; every matched slot gets the same edit.
+      const actionFields: Record<string, any> = { action: selAction };
+      if (selAction === 'charge') {
+        const untilPct = optNumVal('be-charge-until');
+        actionFields.wattage = numVal('be-charge-w', kwpW);
+        if (untilPct != null) actionFields.until_pct = untilPct;
+      } else if (selAction === 'discharge') {
+        const untilPct = optNumVal('be-discharge-until');
+        actionFields.wattage = numVal('be-discharge-w', kwpW);
+        if (untilPct != null) actionFields.until_pct = untilPct;
+      } else if (selAction === 'use_net') {
+        const maxWatts = optNumVal('be-usenet-max');
+        actionFields.use_solar = sr.getElementById('be-usenet-solar')?.classList.contains('on') ?? true;
+        if (maxWatts != null) actionFields.max_wattage = maxWatts;
+      } else if (selAction === 'car_charge') {
+        const netCardOn = sr.getElementById('be-wc-car-net')?.classList.contains('on') ?? false;
+        const batCardOn = sr.getElementById('be-wc-car-bat')?.classList.contains('on') ?? false;
+        const batUntil = batCardOn ? optNumVal('be-car-bat-until') : null;
+        actionFields.use_solar = sr.getElementById('be-car-solar')?.classList.contains('on') ?? true;
+        actionFields.use_net_wattage = netCardOn ? numVal('be-car-net-w', 0) : 0;
+        actionFields.use_battery_wattage = batCardOn ? numVal('be-car-bat-w', 0) : 0;
+        if (batUntil != null) actionFields.use_battery_until_pct = batUntil;
       }
+
+      // Shape each device to how it is controlled: a wattage, a mode, or
+      // nothing at all for plain on/off devices. null unschedules it.
+      const devices: Record<string, Record<string, any> | null> = {};
+      for (const d of devicesAvailable) {
+        const intent = deviceIntents[d.name];
+        if (intent === 'ignore') continue;
+        if (intent !== 'on') { devices[d.name] = null; continue; }
+        if (d.control === 'modes') {
+          const mode = deviceMode[d.name];
+          devices[d.name] = mode ? { mode } : {};
+        } else if (d.control !== 'switch') {
+          devices[d.name] = { wattage: deviceWattage[d.name] };
+        } else {
+          devices[d.name] = {};
+        }
+      }
+
+      const items = matched.map(idx => {
+        const slot = slots[idx];
+        return { time: slot.start ?? slot.time, locked: true, ...actionFields, devices };
+      });
+
+      // One call: one save and one refresh on the backend, however many slots.
+      await hass.callService('ha_ems', 'planning_bulk', { ...commonBase, slots: items });
 
       applyBtn.textContent = '✓ Applied';
       applyBtn.classList.add('success');

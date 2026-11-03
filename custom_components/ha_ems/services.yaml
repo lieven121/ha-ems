@@ -403,3 +403,30 @@ planning_device_clear:
       required: true
       selector:
         text:
+
+planning_bulk:
+  name: "Planning - Bulk Edit"
+  description: "Apply edits to many slots at once, with a single save and refresh. Each entry takes the same fields as the single-slot services, plus an optional devices map."
+  fields:
+    device_id:
+      name: "EMS Device"
+      description: "The EMS device to target."
+      required: true
+      selector:
+        device:
+          integration: ha_ems
+    slots:
+      name: "Slots"
+      description: >-
+        List of slot edits. Each entry has a required `time` and optionally
+        `action` (idle, charge, discharge, use_net, car_charge), `locked`,
+        `wattage`, `until_pct`, `max_wattage`, `use_solar`, `use_net_wattage`,
+        `use_battery_wattage`, `use_battery_until_pct`, and `devices`, a map of
+        device name to `{wattage, mode}` to schedule it or `null` to unschedule it.
+        Leaving out `action` keeps the slot's battery action unchanged.
+      required: true
+      example: >-
+        [{"time": "2026-11-03T14:00:00+01:00", "action": "charge", "wattage": 3000,
+        "locked": true, "devices": {"Boiler": {}, "Heat pump": null}}]
+      selector:
+        object:

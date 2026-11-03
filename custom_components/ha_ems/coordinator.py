@@ -57,6 +57,7 @@ from .simulation import step_soc
 _LOGGER = logging.getLogger(__name__)
 
 _UPDATE_INTERVAL = timedelta(minutes=5)
+_SAVE_DELAY_S = 2
 
 
 class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
@@ -217,8 +218,15 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 "Loaded %d planning overrides from storage", len(self._planning)
             )
 
-    async def _async_save_planning(self) -> None:
-        await self._store.async_save({"planning": self._planning})
+    @callback
+    def _async_save_planning(self) -> None:
+        """Schedule a debounced write; a burst of edits ends up as one save.
+
+        Store flushes pending delayed writes on shutdown, so nothing is lost.
+        """
+        self._store.async_delay_save(
+            lambda: {"planning": self._planning}, _SAVE_DELAY_S
+        )
 
     def async_start_price_tracking(self) -> None:
         """Track the price entity so we refresh as soon as it becomes available.
@@ -502,6 +510,9 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         on every refresh, leaving one live coordinator behind per reload.
         """
         self._cancel_slot_timer()
+        # Flush any debounced write now, so a reload that loads the store
+        # straight away doesn't read stale planning.
+        await self._store.async_save({"planning": self._planning})
         await super().async_shutdown()
 
     def _schedule_next_slot_refresh(self, slots: list[dict]) -> None:
@@ -539,6 +550,43 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
     # Planning mutations
     # ------------------------------------------------------------------
 
+    def _validate_device(self, device_name: str, mode: str | None) -> None:
+        device = self._device_config(device_name)
+        if device is None:
+            raise ServiceValidationError(f"Unknown device: {device_name!r}")
+        if mode is not None:
+            known_modes = [m["name"] for m in device[CONF_DEVICE_MODES]]
+            if mode not in known_modes:
+                raise ServiceValidationError(
+                    f"Unknown mode {mode!r} for {device_name!r}; "
+                    f"expected one of {known_modes}"
+                )
+
+    def _slot_entry(self, key: str) -> dict[str, Any]:
+        """Return the planning entry for *key*, creating a default one."""
+        existing = self._planning.get(key, {})
+        entry = {
+            "action": existing.get("action", ACTION_IDLE),
+            "locked": existing.get("locked", False),
+            "action_config": dict(existing.get("action_config") or {}),
+            "devices": dict(existing.get("devices") or {}),
+        }
+        self._planning[key] = entry
+        return entry
+
+    @staticmethod
+    def _scheduled(wattage: float | None, mode: str | None) -> dict[str, Any]:
+        scheduled: dict[str, Any] = {}
+        if wattage is not None:
+            scheduled["wattage"] = wattage
+        if mode is not None:
+            scheduled["mode"] = mode
+        return scheduled
+
+    async def _async_commit(self) -> None:
+        self._async_save_planning()
+        await self.async_refresh()
+
     async def async_set_planning(
         self,
         time_str: str,
@@ -551,16 +599,9 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         Device scheduling lives alongside the battery action in the same slot,
         so it is carried over rather than overwritten.
         """
-        key = self._find_slot_start_str(time_str)
-        existing = self._planning.get(key, {})
-        self._planning[key] = {
-            "action": action,
-            "locked": locked,
-            "action_config": action_config,
-            "devices": dict(existing.get("devices") or {}),
-        }
-        await self._async_save_planning()
-        await self.async_refresh()
+        entry = self._slot_entry(self._find_slot_start_str(time_str))
+        entry.update(action=action, locked=locked, action_config=action_config)
+        await self._async_commit()
 
     async def async_set_device_slot(
         self,
@@ -574,46 +615,50 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         On/off devices need neither argument; mode devices pass *mode*; only
         'wattage' devices carry a per-slot power figure.
         """
-        device = self._device_config(device_name)
-        if device is None:
-            raise ServiceValidationError(f"Unknown device: {device_name!r}")
-        if mode is not None:
-            known_modes = [m["name"] for m in device[CONF_DEVICE_MODES]]
-            if mode not in known_modes:
-                raise ServiceValidationError(
-                    f"Unknown mode {mode!r} for {device_name!r}; "
-                    f"expected one of {known_modes}"
-                )
-        key = self._find_slot_start_str(time_str)
-        existing = self._planning.get(key, {})
-        devices = dict(existing.get("devices") or {})
-        scheduled: dict[str, Any] = {}
-        if wattage is not None:
-            scheduled["wattage"] = wattage
-        if mode is not None:
-            scheduled["mode"] = mode
-        devices[device_name] = scheduled
-        self._planning[key] = {
-            "action": existing.get("action", ACTION_IDLE),
-            "locked": existing.get("locked", False),
-            "action_config": dict(existing.get("action_config") or {}),
-            "devices": devices,
-        }
-        await self._async_save_planning()
-        await self.async_refresh()
+        self._validate_device(device_name, mode)
+        entry = self._slot_entry(self._find_slot_start_str(time_str))
+        entry["devices"][device_name] = self._scheduled(wattage, mode)
+        await self._async_commit()
 
     async def async_clear_device_slot(self, time_str: str, device_name: str) -> None:
         """Unschedule *device_name* from a single slot."""
         key = self._find_slot_start_str(time_str)
         existing = self._planning.get(key)
-        if not existing:
+        if not existing or device_name not in (existing.get("devices") or {}):
             return
-        devices = dict(existing.get("devices") or {})
-        if devices.pop(device_name, None) is None:
-            return
-        existing["devices"] = devices
-        await self._async_save_planning()
-        await self.async_refresh()
+        self._slot_entry(key)["devices"].pop(device_name)
+        await self._async_commit()
+
+    async def async_apply_bulk(self, items: list[dict[str, Any]]) -> None:
+        """Apply many slot edits with a single save and a single refresh.
+
+        Each item: {time, action|None, locked, action_config|None, devices},
+        where devices maps a device name to {wattage?, mode?} to schedule it,
+        or to None to unschedule it. Everything is validated before anything
+        changes, so a bad item leaves the plan untouched.
+        """
+        resolved: list[tuple[str, dict[str, Any]]] = []
+        for item in items:
+            for name, dev in (item.get("devices") or {}).items():
+                if dev is not None:
+                    self._validate_device(name, dev.get("mode"))
+            resolved.append((self._find_slot_start_str(item["time"]), item))
+
+        for key, item in resolved:
+            entry = self._slot_entry(key)
+            if item.get("action") is not None:
+                entry["action"] = item["action"]
+                entry["locked"] = bool(item.get("locked", False))
+                entry["action_config"] = item.get("action_config") or {}
+            for name, dev in (item.get("devices") or {}).items():
+                if dev is None:
+                    entry["devices"].pop(name, None)
+                else:
+                    entry["devices"][name] = self._scheduled(
+                        dev.get("wattage"), dev.get("mode")
+                    )
+
+        await self._async_commit()
 
     async def async_lock_range(
         self,
@@ -647,8 +692,7 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                     "devices": dict(existing.get("devices") or {}),
                 }
 
-        await self._async_save_planning()
-        await self.async_refresh()
+        await self._async_commit()
 
     async def async_clear(self, clear_locked: bool = False) -> None:
         """Clear planning overrides."""
@@ -658,8 +702,7 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
             self._planning = {
                 k: v for k, v in self._planning.items() if v.get("locked", False)
             }
-        await self._async_save_planning()
-        await self.async_refresh()
+        await self._async_commit()
 
     async def async_charge_car(
         self,
@@ -724,8 +767,7 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 "devices": dict(existing.get("devices") or {}),
             }
 
-        await self._async_save_planning()
-        await self.async_refresh()
+        await self._async_commit()
 
     async def async_optimize(self) -> None:
         """Rebuild planning using iterative breach-detection (mirrors Node-RED logic).
@@ -918,6 +960,5 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
             # Advance SoC simulation
             soc = step(soc, slot, action, action_config)
 
-        await self._async_save_planning()
-        await self.async_refresh()
+        await self._async_commit()
 

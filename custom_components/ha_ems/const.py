@@ -60,6 +60,8 @@ ACTION_DISCHARGE = "discharge"
 ACTION_USE_NET = "use_net"
 ACTION_CAR_CHARGE = "car_charge"
 
+ACTIONS = [ACTION_IDLE, ACTION_CHARGE, ACTION_DISCHARGE, ACTION_USE_NET, ACTION_CAR_CHARGE]
+
 ACTION_LABELS: dict[str, str] = {
     ACTION_IDLE: "Idle",
     ACTION_CHARGE: "Charging",
@@ -96,6 +98,7 @@ SERVICE_PLANNING_CLEAR = "planning_clear"
 SERVICE_PLANNING_OPTIMIZE = "planning_optimize"
 SERVICE_PLANNING_DEVICE_SLOT = "planning_device_slot"
 SERVICE_PLANNING_DEVICE_CLEAR = "planning_device_clear"
+SERVICE_PLANNING_BULK = "planning_bulk"
 
 # ---------------------------------------------------------------------------
 # Service field names
@@ -121,6 +124,9 @@ FIELD_USE_BATTERY_WATTAGE = "use_battery_wattage"
 FIELD_USE_BATTERY_UNTIL_PCT = "use_battery_until_pct"
 FIELD_DEVICE_NAME = "device_name"
 FIELD_MODE = "mode"
+FIELD_ACTION = "action"
+FIELD_SLOTS = "slots"
+FIELD_DEVICES = "devices"
 
 # ---------------------------------------------------------------------------
 # Event name
