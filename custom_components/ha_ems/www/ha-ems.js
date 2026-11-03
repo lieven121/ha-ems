@@ -380,11 +380,13 @@ var DEVICE_PALETTE = [
 ];
 
 // src/shared/utils.ts
+function esc(value) {
+  return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
 function priceScore(price, allPrices) {
   if (allPrices.length === 0) return 5;
-  const sorted = [...allPrices].sort((a, b) => a - b);
-  const cheaperCount = sorted.filter((p) => p >= price).length;
-  const pct = cheaperCount / sorted.length;
+  const cheaperCount = allPrices.filter((p) => p >= price).length;
+  const pct = cheaperCount / allPrices.length;
   return Math.max(1, Math.min(10, Math.round(pct * 9 + 1)));
 }
 function priceScoreColor(score) {
@@ -536,7 +538,7 @@ function renderMainChart(sr, slots, config, hass, nowIdx, devColors, onSlotClick
         (d) => `<div class="dc-pip" style="background:${devColors[d.name] || "#3b82f6"}"></div>`
       ).join("");
       const names = (slot.devices || []).map((d) => d.name).join(", ");
-      return `<div class="dc" data-i="${i}" title="${names}">${pips}</div>`;
+      return `<div class="dc" data-i="${i}" title="${esc(names)}">${pips}</div>`;
     }).join("");
     deviceStrip.querySelectorAll(".dc").forEach((el) => {
       el.addEventListener("click", () => onSlotClick(+el.dataset.i));
@@ -727,7 +729,7 @@ function renderPopup(ctx) {
   const devHtml = (slot.devices || []).length ? `<div class="device-list">${slot.devices.map((d) => `
         <div class="device-item">
           <div class="device-dot" style="background:${devColors[d.name] || "#3b82f6"}"></div>
-          <div class="device-name">${d.name}</div>
+          <div class="device-name">${esc(d.name)}</div>
           <div class="device-watt">${d.manual_override_w ?? d.allocated_wattage_w} W</div>
         </div>`).join("")}</div>` : `<div style="font-family:var(--code-font-family, monospace);font-size:10px;color:var(--text-dim);margin-top:4px">No devices scheduled</div>`;
   const curAction = slot.action || (slot.battery_manual_override_w > 0 ? "charge" : slot.battery_manual_override_w < 0 ? "discharge" : "idle");
@@ -907,7 +909,7 @@ function renderPopup(ctx) {
         const modes = d.modes || [];
         const sel = existing?.mode ?? modes[0];
         control = `<select class="dev-toggle-select" data-dev-sched-mode="${di}">
-            ${modes.map((m) => `<option value="${m}"${m === sel ? " selected" : ""}>${m}</option>`).join("")}
+            ${modes.map((m) => `<option value="${esc(m)}"${m === sel ? " selected" : ""}>${esc(m)}</option>`).join("")}
           </select>`;
       } else if (d.control !== "switch") {
         const watt = existing?.manual_override_w ?? existing?.allocated_wattage_w ?? d.default_wattage;
@@ -916,7 +918,7 @@ function renderPopup(ctx) {
       }
       return `<div class="dev-toggle-card${isOn ? " on" : ""}" data-dev-sched="${di}">
           <div class="dev-toggle-dot" style="background:${devColors[d.name] || "#3b82f6"}"></div>
-          <span class="dev-toggle-name">${d.name}</span>
+          <span class="dev-toggle-name">${esc(d.name)}</span>
           ${control}
         </div>`;
     }).join("");
@@ -1345,7 +1347,7 @@ function renderBulkEdit(ctx) {
     let control = "";
     if (d.control === "modes") {
       control = `<select class="dev-toggle-select" data-dev-mode="${di}">
-              ${(d.modes || []).map((m) => `<option value="${m}">${m}</option>`).join("")}
+              ${(d.modes || []).map((m) => `<option value="${esc(m)}">${esc(m)}</option>`).join("")}
             </select>`;
     } else if (d.control !== "switch") {
       control = `<input class="dev-toggle-input" data-dev-input="${di}" type="number" min="0" max="100000" step="100" value="${d.default_wattage}">
@@ -1353,7 +1355,7 @@ function renderBulkEdit(ctx) {
     }
     return `<div class="dev-toggle-card" data-dev="${di}">
             <div class="dev-toggle-dot" style="background:${ctx.devColors[d.name] || "#3b82f6"}"></div>
-            <span class="dev-toggle-name">${d.name}</span>
+            <span class="dev-toggle-name">${esc(d.name)}</span>
             <span class="dev-toggle-state" data-dev-state="${di}">unchanged</span>
             ${control}
           </div>`;
@@ -2175,7 +2177,7 @@ var EmsDashboardCard = class extends HTMLElement {
       ${devNames.length ? `<div>
         <div class="legend-title">Devices</div>
         <div class="legend-items">
-          ${devNames.map((n2) => `<div class="li"><div class="ls" style="background:${this._devColors[n2]}"></div>${n2}</div>`).join("")}
+          ${devNames.map((n2) => `<div class="li"><div class="ls" style="background:${this._devColors[n2]}"></div>${esc(n2)}</div>`).join("")}
         </div>
       </div>` : ""}`;
     legendEl.hidden = !showPriceLegend && !showActionLegend && !devNames.length;
