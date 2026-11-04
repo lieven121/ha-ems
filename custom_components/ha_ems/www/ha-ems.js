@@ -34,6 +34,10 @@ header span{font-family:var(--code-font-family, monospace);font-size:10px;color:
 .stat-score{font-family:var(--code-font-family, monospace);font-size:11px;font-weight:600;white-space:nowrap;}
 
 .controls{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center;}
+.layer-btns{display:flex;gap:6px;margin-left:auto;}
+.layer-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text-dim);width:30px;height:28px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:.55;transition:all .15s;--mdc-icon-size:16px;}
+.layer-btn:hover{opacity:.85;}
+.layer-btn.on{color:var(--layer-c);border-color:var(--layer-c);opacity:1;}
 .btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:6px;cursor:pointer;font-family:var(--code-font-family, monospace);font-size:10px;font-weight:500;letter-spacing:.05em;transition:all .15s;}
 .btn:hover{border-color:var(--accent);color:var(--accent);}
 .btn.active{background:var(--accent);border-color:var(--accent);color:white;}
@@ -577,7 +581,7 @@ function resolveBatteryEntity(config, hass, planningEntityId) {
   const fromIntegration = planEntity ? hass?.states[planEntity]?.attributes?.battery_entity_id : null;
   return fromIntegration || null;
 }
-function renderBatteryOverlay(sr, slots, config, hass, planningEntityId) {
+function renderBatteryOverlay(sr, slots, config, hass, planningEntityId, visible = { solar: true, load: true, battery: true }) {
   const n = slots.length;
   const battSvg = sr.getElementById("battery-svg");
   const battAxis = sr.getElementById("batt-axis");
@@ -586,10 +590,10 @@ function renderBatteryOverlay(sr, slots, config, hass, planningEntityId) {
   const rawPct = battState ? parseFloat(battState.state) : NaN;
   const currentPct = isNaN(rawPct) ? null : rawPct;
   const predPoints = slots.map((s, idx) => s.battery_prediction == null ? null : { x: (idx + 0.5) / n * 100, y: (1 - s.battery_prediction / 100) * CHART_H }).filter(Boolean);
-  const enabled = config.layout?.show_battery !== false && n > 0;
+  const enabled = config.layout?.show_battery !== false && visible.battery && n > 0;
   const showPred = enabled && predPoints.length > 1;
   const showCurrent = enabled && currentPct != null;
-  const forecastSvg = renderForecast(slots, config);
+  const forecastSvg = renderForecast(slots, config, visible);
   const lineColor = rgbToCss(config.integration?.battery_line_color, "#06b6d4");
   if (battSvg) {
     if (showPred || showCurrent || forecastSvg) {
@@ -628,7 +632,7 @@ function renderBatteryOverlay(sr, slots, config, hass, planningEntityId) {
     }
   }
 }
-function renderForecast(slots, config) {
+function renderForecast(slots, config, visible) {
   const n = slots.length;
   if (n === 0 || config.layout?.show_forecast === false) return "";
   const solar = slots.map((s) => Math.max(0, s.solar_w ?? 0));
@@ -638,12 +642,12 @@ function renderForecast(slots, config) {
   const y = (w) => (CHART_H - w / peak * CHART_H * 0.9).toFixed(1);
   const x = (i) => ((i + 0.5) / n * 100).toFixed(2);
   let out = "";
-  if (solar.some((w) => w > 0)) {
+  if (visible.solar && solar.some((w) => w > 0)) {
     const top = solar.map((w, i) => `L${x(i)} ${y(w)}`).join(" ");
     out += `<path d="M${x(0)} ${CHART_H} ${top} L${x(n - 1)} ${CHART_H} Z" fill="#facc15" opacity="0.22" stroke="none"/>`;
     out += `<path d="${top.replace(/^L/, "M")}" fill="none" stroke="#eab308" stroke-width="1" opacity="0.8" vector-effect="non-scaling-stroke"/>`;
   }
-  if (load.some((w) => w > 0)) {
+  if (visible.load && load.some((w) => w > 0)) {
     const line = load.map((w, i) => `${i === 0 ? "M" : "L"}${x(i)} ${y(w)}`).join(" ");
     out += `<path d="${line}" fill="none" stroke="#a855f7" stroke-width="1" opacity="0.7" vector-effect="non-scaling-stroke"/>`;
   }
@@ -1822,6 +1826,7 @@ var EmsDashboardCard = class extends HTMLElement {
     this._days = [];
     this._dayIdx = -1;
     this._activeIdx = null;
+    this._layers = { solar: true, load: true, battery: true };
     this._devColors = {};
     this._lastSer = "";
     this._config = {};
@@ -2205,23 +2210,46 @@ var EmsDashboardCard = class extends HTMLElement {
     const today = localDateStr(/* @__PURE__ */ new Date());
     const tomorrow = localDateStr(new Date(Date.now() + 864e5));
     const fixedDay = this._config.layout?.day;
-    sr.getElementById("day-btns").hidden = !!fixedDay;
-    if (!fixedDay) {
-      sr.getElementById("day-btns").innerHTML = this._days.map((d, i) => {
-        const label = d.date === today ? "Today" : d.date === tomorrow ? "Tomorrow" : d.date;
-        return `<button class="btn${i === this._dayIdx ? " active" : ""}" data-day="${i}">${label}</button>`;
-      }).join("");
-      sr.getElementById("day-btns").querySelectorAll(".btn").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          this._dayIdx = +btn.dataset.day;
-          this._filteredSlots = this._days[this._dayIdx].slots;
-          this._buildDevColors();
-          this._render();
-        });
+    const dayHtml = fixedDay ? "" : this._days.map((d, i) => {
+      const label = d.date === today ? "Today" : d.date === tomorrow ? "Tomorrow" : d.date;
+      return `<button class="btn${i === this._dayIdx ? " active" : ""}" data-day="${i}">${label}</button>`;
+    }).join("");
+    const layout = this._config.layout;
+    const toggles = [];
+    if (layout?.show_forecast !== false && slots.some((s) => (s.solar_w ?? 0) > 0))
+      toggles.push({ key: "solar", icon: "mdi:solar-power", title: "Solar forecast", color: "#eab308" });
+    if (layout?.show_forecast !== false && slots.some((s) => (s.load_w ?? 0) > 0))
+      toggles.push({ key: "load", icon: "mdi:home-lightning-bolt", title: "House load", color: "#a855f7" });
+    if (layout?.show_battery !== false && (slots.some((s) => s.battery_prediction != null) || resolveBatteryEntity(this._config, this._hass, this._planningEntityId)))
+      toggles.push({
+        key: "battery",
+        icon: "mdi:battery",
+        title: "Battery",
+        color: rgbToCss(this._config.integration?.battery_line_color, "#06b6d4")
       });
-    }
+    const toggleHtml = toggles.map((t) => `<button class="layer-btn${this._layers[t.key] ? " on" : ""}" data-layer="${t.key}"
+        style="--layer-c:${t.color}" title="${t.title}" aria-pressed="${this._layers[t.key]}">
+        <ha-icon icon="${t.icon}"></ha-icon></button>`).join("");
+    const dayBtns = sr.getElementById("day-btns");
+    dayBtns.hidden = !dayHtml && !toggleHtml;
+    dayBtns.innerHTML = `${dayHtml}${toggleHtml ? `<div class="layer-btns">${toggleHtml}</div>` : ""}`;
+    dayBtns.querySelectorAll(".btn[data-day]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        this._dayIdx = +btn.dataset.day;
+        this._filteredSlots = this._days[this._dayIdx].slots;
+        this._buildDevColors();
+        this._render();
+      });
+    });
+    dayBtns.querySelectorAll(".layer-btn[data-layer]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const key = btn.dataset.layer;
+        this._layers = { ...this._layers, [key]: !this._layers[key] };
+        this._render();
+      });
+    });
     renderMainChart(sr, slots, this._config, this._hass, ns, this._devColors, (i) => this._openPopup(i));
-    renderBatteryOverlay(sr, slots, this._config, this._hass, this._planningEntityId);
+    renderBatteryOverlay(sr, slots, this._config, this._hass, this._planningEntityId, this._layers);
     const avg = prices.reduce((a, b) => a + b, 0) / n;
     const min = Math.min(...prices);
     const max = Math.max(...prices);
@@ -2255,6 +2283,7 @@ var EmsDashboardCard = class extends HTMLElement {
     const devNames = Object.keys(this._devColors);
     const showPriceLegend = this._config.layout?.show_price_legend !== false;
     const showActionLegend = this._config.layout?.show_action_legend !== false;
+    const showDeviceLegend = this._config.layout?.show_device_legend !== false && devNames.length > 0;
     const legendEl = sr.getElementById("legend");
     legendEl.innerHTML = `
       ${showPriceLegend ? `<div>
@@ -2269,13 +2298,13 @@ var EmsDashboardCard = class extends HTMLElement {
           ${[{ c: "#374151", l: "Idle" }, { c: "#16a34a", l: "Charge" }, { c: "#2563eb", l: "Use Net" }, { c: "#dc2626", l: "Discharge" }, { c: "#ca8a04", l: "Car" }].map((e) => `<div class="li"><div class="ls" style="background:${e.c}"></div>${e.l}</div>`).join("")}
         </div>
       </div>` : ""}
-      ${devNames.length ? `<div>
+      ${showDeviceLegend ? `<div>
         <div class="legend-title">Devices</div>
         <div class="legend-items">
           ${devNames.map((n2) => `<div class="li"><div class="ls" style="background:${this._devColors[n2]}"></div>${esc(n2)}</div>`).join("")}
         </div>
       </div>` : ""}`;
-    legendEl.hidden = !showPriceLegend && !showActionLegend && !devNames.length;
+    legendEl.hidden = !showPriceLegend && !showActionLegend && !showDeviceLegend;
     sr.getElementById("action-strip").hidden = this._config.layout?.show_actions === false;
     sr.getElementById("brush-wrap").hidden = this._config.layout?.show_brush === false;
     sr.querySelector("header").hidden = this._config.layout?.show_header === false;
@@ -2464,6 +2493,7 @@ var EDITOR_SCHEMA = [
       { name: "show_actions", selector: { boolean: {} } },
       { name: "show_price_legend", selector: { boolean: {} } },
       { name: "show_action_legend", selector: { boolean: {} } },
+      { name: "show_device_legend", selector: { boolean: {} } },
       { name: "show_battery", selector: { boolean: {} } },
       { name: "show_forecast", selector: { boolean: {} } }
     ]
@@ -2505,6 +2535,7 @@ function editorLabel(schema) {
     show_actions: "Show Action Strip",
     show_price_legend: "Show Price Legend",
     show_action_legend: "Show Action Legend",
+    show_device_legend: "Show Devices Legend",
     show_battery: "Show Battery Line",
     show_forecast: "Show Solar & Load Forecast",
     day: "Fixed Day",
@@ -2529,12 +2560,13 @@ function editorHelper(schema) {
     show_actions: "Show the action colour strip below the bars (default: true).",
     show_price_legend: "Show the price colour legend below the chart (default: true).",
     show_action_legend: "Show the action colour legend below the chart (default: true).",
+    show_device_legend: "Show the scheduled devices legend below the chart (default: true).",
     day: "Fix the displayed day. When set, the Today/Tomorrow buttons are hidden.",
     device_id: "Select the EMS device. Used to read planning data and send service calls.",
     battery_entity: "Number or sensor entity for current battery state of charge (0\u2013100). Used to draw the current battery % line on the chart.",
     battery_line_color: "Color for the battery overlay lines. Defaults to a teal/cyan color.",
-    show_battery: "Overlay current (solid) and predicted (dashed) battery % on the chart (default: true when battery_entity is set).",
-    show_forecast: "Shade the solar forecast (yellow) and draw the predicted house load (purple) behind the price bars (default: true)."
+    show_battery: "Overlay current (solid) and predicted (dashed) battery % on the chart (default: true when battery_entity is set). Off also removes its toggle above the chart.",
+    show_forecast: "Shade the solar forecast (yellow) and draw the predicted house load (purple) behind the price bars (default: true). Off also removes their toggles above the chart."
   }[schema.name] ?? "";
 }
 var EmsDashboardCardEditor = class extends HTMLElement {
