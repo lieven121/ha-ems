@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta
 
@@ -13,19 +14,34 @@ def resample_energy_to_slots(
 ) -> list[float]:
     """Average power (W) in each slot, from energy (Wh) per period.
 
-    *periods* maps a period start to the energy in that period. Every period
-    is as long as the smallest gap between keys (an hour when there is only
-    one), and its energy is spread evenly over it, so hourly forecasts split
-    cleanly into 15-minute slots and vice versa. Missing periods count as 0:
-    Forecast.Solar, for one, leaves out the zero-energy hours of the night.
+    *periods* maps a period start to the energy in that period, spread evenly
+    over the period, so hourly forecasts split cleanly into 15-minute slots
+    and vice versa.
+
+    A period runs until the next key, but no longer than the series' usual
+    step (the most common gap between keys; an hour when there is only one
+    key). That covers:
+    - Forecast.Solar's extra sunrise/sunset keys (07:42, say), which would
+      otherwise shrink every hourly period to the shortest gap;
+    - missing periods, which count as 0: Forecast.Solar, for one, leaves out
+      the zero-energy hours of the night.
     """
     if not periods or not slot_starts or slot_hours <= 0:
         return [0.0] * len(slot_starts)
 
     starts = sorted(periods)
     gaps = [b - a for a, b in zip(starts, starts[1:], strict=False) if b > a]
-    length = min(gaps) if gaps else timedelta(hours=1)
-    spans = [(start, start + length, float(periods[start])) for start in starts]
+    step = (
+        max(Counter(gaps).items(), key=lambda kv: (kv[1], -kv[0]))[0]
+        if gaps
+        else timedelta(hours=1)
+    )
+    spans = []
+    for i, start in enumerate(starts):
+        end = start + step
+        if i + 1 < len(starts):
+            end = min(end, starts[i + 1])
+        spans.append((start, end, float(periods[start])))
 
     slot_len = timedelta(hours=slot_hours)
     out: list[float] = []
