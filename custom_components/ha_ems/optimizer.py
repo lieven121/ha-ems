@@ -9,7 +9,7 @@ found by dynamic programming over the battery's state of charge:
 
 - State: SoC on a 0.5 % grid (values in between are interpolated).
 - Per slot, every allowed action is tried: idle (self-consumption), use_net
-  (hold the battery), charge and, if allowed, discharge -- the last two to
+  (no discharge; solar surplus still charges), charge and, if allowed, discharge -- the last two to
   every reachable target SoC, so a slot can also charge just a little.
 - Cost of a slot: grid import x price - export x injection price. Dropping
   below min_battery is penalised so heavily that it only happens when nothing
@@ -134,15 +134,22 @@ class _Model:
 
         settings = self.settings
         net = max(slot.load_w, 0.0) - max(slot.solar_w, 0.0)
-        out: list[Option] = [(ACTION_USE_NET, {"use_solar": True}, soc, self.cost(slot, net))]
+        # Solar surplus charges the battery in both idle and use_net.
+        if net < 0:
+            b_in = min(-net, self.watts, (100.0 - soc) / self.pct_in)
+            solar_end, solar_grid = soc + b_in * self.pct_in, net + b_in
+        else:
+            solar_end, solar_grid = soc, net
+        out: list[Option] = [
+            (ACTION_USE_NET, {"use_solar": True}, solar_end, self.cost(slot, solar_grid))
+        ]
 
         if settings.allow_idle_for_optimize:
             if net > 0:
                 b_out = min(net, soc / self.pct_out)
                 end, grid_w = soc - b_out * self.pct_out, net - b_out
             else:
-                b_in = min(-net, self.watts, (100.0 - soc) / self.pct_in)
-                end, grid_w = soc + b_in * self.pct_in, net + b_in
+                end, grid_w = solar_end, solar_grid
             out.append((ACTION_IDLE, {}, end, self.cost(slot, grid_w)))
 
         max_soc, min_soc = settings.max_battery, settings.min_battery

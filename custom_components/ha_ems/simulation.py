@@ -92,7 +92,9 @@ def simulate_slot(
       larger) until ``until_pct``; the house runs on solar and grid.
     - discharge: the battery covers the house and exports ``wattage`` on top,
       down to ``until_pct``.
-    - use_net: the battery is held; the house runs on solar and grid. A
+    - use_net: the battery is not discharged; the house runs on solar and
+      grid. Solar surplus (solar minus house and devices) charges the
+      battery, unless ``use_solar`` is false: then it is exported. A
       ``max_wattage`` below the need makes the battery cover the difference.
     - car_charge: only the configured battery budget moves the battery.
 
@@ -146,6 +148,8 @@ def simulate_slot(
         need = max(net, 0.0)
         if 0 < max_w < need:
             battery_out = min(need - max_w, max_out_w(0.0))
+        elif net < 0 and action_config.get("use_solar", True) is not False:
+            battery_in = min(-net, max_in_w(100.0))
     elif action == ACTION_CAR_CHARGE:
         budget = car_battery_budget_w(action_config)
         if budget > 0:

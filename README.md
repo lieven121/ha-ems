@@ -110,7 +110,7 @@ The optimizer runs when you press **Optimize** or call `ha_ems.planning_optimize
    The profile has a value per weekday and hour. Recent weeks weigh more, and one-off spikes are ignored. A busier or quieter day than usual scales the next six hours.
 3. **Energy model per action:**
    - **idle**: self-consumption. The battery covers what solar doesn't, and solar surplus charges it.
-   - **use_net**: the battery is held, and the house runs on solar and grid.
+   - **use_net**: the battery is never discharged, and the house runs on solar and grid. Solar surplus (solar minus house and devices) charges the battery; with **Use Solar** off it is exported instead.
    - **charge** / **discharge**: grid charging or exporting at the kWp power, to a target SoC.
    - Round-trip loss is split evenly between charging and discharging.
 4. **Planning:** a dynamic program picks the cheapest plan over all unlocked future slots.

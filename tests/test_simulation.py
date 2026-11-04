@@ -122,8 +122,16 @@ def test_idle_empty_battery_imports_the_rest():
     assert r.import_kwh == pytest.approx(0.8)
 
 
-def test_use_net_holds_battery_and_exports_surplus():
+def test_use_net_charges_from_solar_surplus():
+    # 2000 W solar - 500 W house = 1500 W into the battery, nothing exported.
     r = sim(50, ACTION_USE_NET, load=500, solar=2000)
+    assert r.soc == pytest.approx(65)
+    assert r.export_kwh == pytest.approx(0)
+    assert r.import_kwh == pytest.approx(0)
+
+
+def test_use_net_without_solar_flag_holds_battery_and_exports_surplus():
+    r = sim(50, ACTION_USE_NET, {"use_solar": False}, load=500, solar=2000)
     assert r.soc == 50
     assert r.export_kwh == pytest.approx(1.5)
     r = sim(50, ACTION_USE_NET, load=1500, solar=500)
