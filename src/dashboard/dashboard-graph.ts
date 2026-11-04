@@ -148,12 +148,16 @@ export function resolveBatteryEntity(config: CardConfig, hass: any, planningEnti
   return fromIntegration || null;
 }
 
+/** Overlay layers the user can switch on and off above the chart. */
+export interface ChartLayers { solar: boolean; load: boolean; battery: boolean; }
+
 export function renderBatteryOverlay(
   sr: ShadowRoot,
   slots: Slot[],
   config: CardConfig,
   hass: any,
   planningEntityId: string | null,
+  visible: ChartLayers = { solar: true, load: true, battery: true },
 ): void {
   const n = slots.length;
   const battSvg = sr.getElementById('battery-svg') as unknown as SVGElement | null;
@@ -173,10 +177,10 @@ export function renderBatteryOverlay(
       : { x: (idx + 0.5) / n * 100, y: (1 - s.battery_prediction / 100) * CHART_H })
     .filter(Boolean) as { x: number; y: number }[];
 
-  const enabled     = config.layout?.show_battery !== false && n > 0;
+  const enabled     = config.layout?.show_battery !== false && visible.battery && n > 0;
   const showPred    = enabled && predPoints.length > 1;
   const showCurrent = enabled && currentPct != null;
-  const forecastSvg = renderForecast(slots, config);
+  const forecastSvg = renderForecast(slots, config, visible);
 
   const lineColor = rgbToCss(config.integration?.battery_line_color, '#06b6d4');
 
@@ -231,7 +235,7 @@ export function renderBatteryOverlay(
 /** Solar forecast (filled) and predicted house load (thin line), both
  *  scaled to the larger of the two so they compare at a glance. They sit
  *  behind the battery line; hide them with layout.show_forecast: false. */
-function renderForecast(slots: Slot[], config: CardConfig): string {
+function renderForecast(slots: Slot[], config: CardConfig, visible: ChartLayers): string {
   const n = slots.length;
   if (n === 0 || config.layout?.show_forecast === false) return '';
   const solar = slots.map(s => Math.max(0, s.solar_w ?? 0));
@@ -243,12 +247,12 @@ function renderForecast(slots: Slot[], config: CardConfig): string {
   const x = (i: number) => ((i + 0.5) / n * 100).toFixed(2);
 
   let out = '';
-  if (solar.some(w => w > 0)) {
+  if (visible.solar && solar.some(w => w > 0)) {
     const top = solar.map((w, i) => `L${x(i)} ${y(w)}`).join(' ');
     out += `<path d="M${x(0)} ${CHART_H} ${top} L${x(n - 1)} ${CHART_H} Z" fill="#facc15" opacity="0.22" stroke="none"/>`;
     out += `<path d="${top.replace(/^L/, 'M')}" fill="none" stroke="#eab308" stroke-width="1" opacity="0.8" vector-effect="non-scaling-stroke"/>`;
   }
-  if (load.some(w => w > 0)) {
+  if (visible.load && load.some(w => w > 0)) {
     const line = load.map((w, i) => `${i === 0 ? 'M' : 'L'}${x(i)} ${y(w)}`).join(' ');
     out += `<path d="${line}" fill="none" stroke="#a855f7" stroke-width="1" opacity="0.7" vector-effect="non-scaling-stroke"/>`;
   }

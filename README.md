@@ -94,6 +94,8 @@ device_id: <your_ems_device_id>
 | Keyboard nav | ← / → to step; Esc to close |
 | Day switch | Today / Tomorrow buttons in the slot dialog; switching keeps the time of day |
 | Solar & load | Solar forecast (yellow) and predicted house load (purple) behind the bars; `layout.show_forecast: false` hides them |
+| Layer toggles | Solar, house load and battery icon buttons next to Today / Tomorrow show or hide each overlay |
+| Devices legend | `layout.show_device_legend: false` hides the scheduled devices legend |
 | Locking | Edits made in the slot editor or bulk edit are locked by default (untick to leave them to the optimizer); bulk edit also has Lock / Unlock buttons |
 
 ---

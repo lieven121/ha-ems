@@ -35,6 +35,7 @@ export const EDITOR_SCHEMA = [
       { name: 'show_actions',      selector: { boolean: {} } },
       { name: 'show_price_legend',  selector: { boolean: {} } },
       { name: 'show_action_legend', selector: { boolean: {} } },
+      { name: 'show_device_legend', selector: { boolean: {} } },
       { name: 'show_battery',       selector: { boolean: {} } },
       { name: 'show_forecast',      selector: { boolean: {} } },
     ],
@@ -77,6 +78,7 @@ export function editorLabel(schema: any): string {
     show_actions:          'Show Action Strip',
     show_price_legend:     'Show Price Legend',
     show_action_legend:    'Show Action Legend',
+    show_device_legend:    'Show Devices Legend',
     show_battery:          'Show Battery Line',
     show_forecast:         'Show Solar & Load Forecast',
     day:                   'Fixed Day',
@@ -102,12 +104,13 @@ export function editorHelper(schema: any): string {
     show_actions:        'Show the action colour strip below the bars (default: true).',
     show_price_legend:   'Show the price colour legend below the chart (default: true).',
     show_action_legend:  'Show the action colour legend below the chart (default: true).',
+    show_device_legend:  'Show the scheduled devices legend below the chart (default: true).',
     day:                 'Fix the displayed day. When set, the Today/Tomorrow buttons are hidden.',
     device_id:           'Select the EMS device. Used to read planning data and send service calls.',
     battery_entity:      'Number or sensor entity for current battery state of charge (0–100). Used to draw the current battery % line on the chart.',
     battery_line_color:  'Color for the battery overlay lines. Defaults to a teal/cyan color.',
-    show_battery:        'Overlay current (solid) and predicted (dashed) battery % on the chart (default: true when battery_entity is set).',
-    show_forecast:       'Shade the solar forecast (yellow) and draw the predicted house load (purple) behind the price bars (default: true).',
+    show_battery:        'Overlay current (solid) and predicted (dashed) battery % on the chart (default: true when battery_entity is set). Off also removes its toggle above the chart.',
+    show_forecast:       'Shade the solar forecast (yellow) and draw the predicted house load (purple) behind the price bars (default: true). Off also removes their toggles above the chart.',
   } as Record<string, string>)[schema.name] ?? '';
 }
 

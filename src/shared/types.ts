@@ -59,6 +59,7 @@ export interface CardConfig {
     show_actions?: boolean;
     show_price_legend?: boolean;
     show_action_legend?: boolean;
+    show_device_legend?: boolean;
     show_battery?: boolean;
   };
   advanced?: { debug?: boolean };

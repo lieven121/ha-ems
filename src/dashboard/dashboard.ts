@@ -2,7 +2,7 @@ import { CSS } from '../shared/styles';
 import { CHART_H, DEVICE_PALETTE } from '../shared/constants';
 import { Slot, CardConfig } from '../shared/types';
 import { esc, localDateStr, slotAction, slotTimeStr, priceColor, priceScore, priceScoreColor } from '../shared/utils';
-import { renderMainChart, renderBatteryOverlay, renderBrush, resolveBatteryEntity, scrollToSlot } from './dashboard-graph';
+import { ChartLayers, renderMainChart, renderBatteryOverlay, renderBrush, resolveBatteryEntity, rgbToCss, scrollToSlot } from './dashboard-graph';
 import { DialogContext, renderPopup } from './dashboard-dialog';
 import { renderBulkEdit } from './dashboard-bulk-edit';
 
@@ -12,6 +12,7 @@ export class EmsDashboardCard extends HTMLElement {
   private _days: { date: string; slots: Slot[] }[];
   private _dayIdx: number;
   private _activeIdx: number | null;
+  private _layers: ChartLayers;
   private _devColors: Record<string, string>;
   private _lastSer: string;
   private _config: CardConfig;
@@ -34,6 +35,7 @@ export class EmsDashboardCard extends HTMLElement {
     this._days          = [];
     this._dayIdx        = -1; // -1 = uninitialized; will default to today on first data load
     this._activeIdx     = null;
+    this._layers        = { solar: true, load: true, battery: true };
     this._devColors     = {};
     this._lastSer       = '';
     this._config        = {};
@@ -458,28 +460,52 @@ export class EmsDashboardCard extends HTMLElement {
     const prices = slots.map(s => s.price);
     const ns     = this._nowSlotIdx();
 
-    // Day buttons — hidden when a fixed day is configured
+    // Day buttons (hidden when a fixed day is configured) and layer toggles
     const today    = localDateStr(new Date());
     const tomorrow = localDateStr(new Date(Date.now() + 86400000));
     const fixedDay = this._config.layout?.day;
-    (sr.getElementById('day-btns') as HTMLElement).hidden = !!fixedDay;
-    if (!fixedDay) {
-      sr.getElementById('day-btns')!.innerHTML = this._days.map((d, i) => {
-        const label = d.date === today ? 'Today' : d.date === tomorrow ? 'Tomorrow' : d.date;
-        return `<button class="btn${i === this._dayIdx ? ' active' : ''}" data-day="${i}">${label}</button>`;
-      }).join('');
-      sr.getElementById('day-btns')!.querySelectorAll('.btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          this._dayIdx        = +(btn as HTMLElement).dataset.day!;
-          this._filteredSlots = this._days[this._dayIdx].slots;
-          this._buildDevColors();
-          this._render();
-        });
+    const dayHtml  = fixedDay ? '' : this._days.map((d, i) => {
+      const label = d.date === today ? 'Today' : d.date === tomorrow ? 'Tomorrow' : d.date;
+      return `<button class="btn${i === this._dayIdx ? ' active' : ''}" data-day="${i}">${label}</button>`;
+    }).join('');
+
+    const layout  = this._config.layout;
+    const toggles: { key: keyof ChartLayers; icon: string; title: string; color: string }[] = [];
+    if (layout?.show_forecast !== false && slots.some(s => (s.solar_w ?? 0) > 0))
+      toggles.push({ key: 'solar', icon: 'mdi:solar-power', title: 'Solar forecast', color: '#eab308' });
+    if (layout?.show_forecast !== false && slots.some(s => (s.load_w ?? 0) > 0))
+      toggles.push({ key: 'load', icon: 'mdi:home-lightning-bolt', title: 'House load', color: '#a855f7' });
+    if (layout?.show_battery !== false
+        && (slots.some(s => s.battery_prediction != null)
+            || resolveBatteryEntity(this._config, this._hass, this._planningEntityId)))
+      toggles.push({ key: 'battery', icon: 'mdi:battery', title: 'Battery',
+        color: rgbToCss(this._config.integration?.battery_line_color, '#06b6d4') });
+    const toggleHtml = toggles.map(t =>
+      `<button class="layer-btn${this._layers[t.key] ? ' on' : ''}" data-layer="${t.key}"
+        style="--layer-c:${t.color}" title="${t.title}" aria-pressed="${this._layers[t.key]}">
+        <ha-icon icon="${t.icon}"></ha-icon></button>`).join('');
+
+    const dayBtns = sr.getElementById('day-btns')!;
+    dayBtns.hidden    = !dayHtml && !toggleHtml;
+    dayBtns.innerHTML = `${dayHtml}${toggleHtml ? `<div class="layer-btns">${toggleHtml}</div>` : ''}`;
+    dayBtns.querySelectorAll('.btn[data-day]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this._dayIdx        = +(btn as HTMLElement).dataset.day!;
+        this._filteredSlots = this._days[this._dayIdx].slots;
+        this._buildDevColors();
+        this._render();
       });
-    }
+    });
+    dayBtns.querySelectorAll('.layer-btn[data-layer]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const key = (btn as HTMLElement).dataset.layer as keyof ChartLayers;
+        this._layers = { ...this._layers, [key]: !this._layers[key] };
+        this._render();
+      });
+    });
 
     renderMainChart(sr, slots, this._config, this._hass, ns, this._devColors, (i) => this._openPopup(i));
-    renderBatteryOverlay(sr, slots, this._config, this._hass, this._planningEntityId);
+    renderBatteryOverlay(sr, slots, this._config, this._hass, this._planningEntityId, this._layers);
 
     // Stats
     const avg = prices.reduce((a, b) => a + b, 0) / n;
@@ -519,6 +545,7 @@ export class EmsDashboardCard extends HTMLElement {
     const devNames = Object.keys(this._devColors);
     const showPriceLegend  = this._config.layout?.show_price_legend  !== false;
     const showActionLegend = this._config.layout?.show_action_legend !== false;
+    const showDeviceLegend = this._config.layout?.show_device_legend !== false && devNames.length > 0;
     const legendEl = sr.getElementById('legend')!;
     legendEl.innerHTML = `
       ${showPriceLegend ? `<div>
@@ -535,13 +562,13 @@ export class EmsDashboardCard extends HTMLElement {
             .map(e => `<div class="li"><div class="ls" style="background:${e.c}"></div>${e.l}</div>`).join('')}
         </div>
       </div>` : ''}
-      ${devNames.length ? `<div>
+      ${showDeviceLegend ? `<div>
         <div class="legend-title">Devices</div>
         <div class="legend-items">
           ${devNames.map(n => `<div class="li"><div class="ls" style="background:${this._devColors[n]}"></div>${esc(n)}</div>`).join('')}
         </div>
       </div>` : ''}`;
-    (legendEl as HTMLElement).hidden = !showPriceLegend && !showActionLegend && !devNames.length;
+    (legendEl as HTMLElement).hidden = !showPriceLegend && !showActionLegend && !showDeviceLegend;
     (sr.getElementById('action-strip') as HTMLElement).hidden = this._config.layout?.show_actions === false;
     (sr.getElementById('brush-wrap') as HTMLElement).hidden   = this._config.layout?.show_brush === false;
     (sr.querySelector('header') as HTMLElement).hidden        = this._config.layout?.show_header === false;

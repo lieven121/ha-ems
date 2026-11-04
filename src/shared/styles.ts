@@ -33,6 +33,10 @@ header span{font-family:var(--code-font-family, monospace);font-size:10px;color:
 .stat-score{font-family:var(--code-font-family, monospace);font-size:11px;font-weight:600;white-space:nowrap;}
 
 .controls{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center;}
+.layer-btns{display:flex;gap:6px;margin-left:auto;}
+.layer-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text-dim);width:30px;height:28px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:.55;transition:all .15s;--mdc-icon-size:16px;}
+.layer-btn:hover{opacity:.85;}
+.layer-btn.on{color:var(--layer-c);border-color:var(--layer-c);opacity:1;}
 .btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:6px;cursor:pointer;font-family:var(--code-font-family, monospace);font-size:10px;font-weight:500;letter-spacing:.05em;transition:all .15s;}
 .btn:hover{border-color:var(--accent);color:var(--accent);}
 .btn.active{background:var(--accent);border-color:var(--accent);color:white;}
