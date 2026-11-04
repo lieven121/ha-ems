@@ -928,12 +928,18 @@ function renderPopup(ctx) {
         <span class="pop-row-label">Predicted Battery</span>
         <span class="pop-row-value">${slot.battery_prediction.toFixed(1)} %</span>
       </div>` : ""}
+      ${slot.solar_w != null ? `<div class="pop-row">
+        <span class="pop-row-label">Predicted Solar</span>
+        <span class="pop-row-value" style="color:#eab308">\u2600 ${Math.round(slot.solar_w)} W</span>
+      </div>` : ""}
+      ${slot.load_w != null ? `<div class="pop-row">
+        <span class="pop-row-label">Predicted Usage</span>
+        <span class="pop-row-value" style="color:#a855f7">${Math.round(slot.load_w)} W</span>
+      </div>` : ""}
       ${slot.locked ? `<div class="pop-row">
         <span class="pop-row-label">Locked</span>
         <span class="pop-row-value">\u{1F512} Yes</span>
       </div>` : ""}
-      ${/* solar_wh_predicted — will be added in future */
-  ""}
     </div>
 
     ${config.layout?.show_actions !== false ? editHtml : ""}
