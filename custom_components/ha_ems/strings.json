@@ -155,6 +155,12 @@
       },
       "ems_kwp": {
         "name": "kWp"
+      },
+      "ems_max_discharge": {
+        "name": "Max discharge power"
+      },
+      "ems_cycle_cost": {
+        "name": "Battery cycle cost"
       }
     },
     "switch": {

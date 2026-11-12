@@ -23,6 +23,10 @@ class EMSSettings:
     max_battery: float = DEFAULT_MAX_BATTERY  # %
     avg_consumption: float = DEFAULT_AVG_CONSUMPTION  # W, baseline house load
     kwp_w: float = DEFAULT_KWP  # W, max charge power from solar/inverter
+    discharge_w: float = DEFAULT_KWP  # W, max battery discharge power
+    # Price units per kWh discharged: the battery is only cycled when the
+    # gain after losses is larger than this.
+    cycle_cost: float = 0.0
     allow_discharge: bool = False
     allow_idle_for_optimize: bool = True  # idle (use battery) on expensive slots
 

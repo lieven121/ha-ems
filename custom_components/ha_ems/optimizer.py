@@ -11,12 +11,21 @@ found by dynamic programming over the battery's state of charge:
 - Per slot, every allowed action is tried: idle (self-consumption), use_net
   (no discharge; solar surplus still charges), charge and, if allowed, discharge -- the last two to
   every reachable target SoC, so a slot can also charge just a little.
-- Cost of a slot: grid import x price - export x injection price. Dropping
-  below min_battery is penalised so heavily that it only happens when nothing
-  can prevent it.
+- Cost of a slot: grid import x price - export x injection price, plus the
+  configured cycle cost per kWh the battery delivers. Dropping below
+  min_battery is penalised so heavily that it only happens when nothing can
+  prevent it.
 - Whatever is left in the battery at the end of the horizon is credited at
-  the average of the cheapest quarter of prices, so the plan doesn't empty
-  the battery just because tomorrow's prices aren't known yet.
+  what it would cost to put back: the average of the cheapest quarter of
+  prices, losses included. So the plan only uses or sells stored energy when
+  that beats buying it again, and doesn't empty the battery just because
+  tomorrow's prices aren't known yet. Energy beyond what the battery holds
+  now is credited at the cheapest price only, so nothing is bought on the
+  guess that tomorrow will be dearer.
+- Charging is limited to the charge power (the grid peak); discharging may go
+  up to the battery's own discharge power. Pushing power out costs a little
+  more the harder it is pushed, so similar-priced slots share a discharge
+  while a slot that stands out still gets full power.
 
 Locked and car-charge slots keep their action; the optimiser plans around
 them.
@@ -43,6 +52,9 @@ from .models import EMSSettings
 from .simulation import one_way_efficiency, simulate_slot
 
 GRID_STEP_PCT = 0.5
+# Most target SoCs tried per slot in one direction; a wider range (a long
+# slot, a powerful battery) is covered in coarser steps.
+_MAX_TARGETS = 24
 _EPS = 1e-9
 _TIE = 1e-9
 
@@ -50,8 +62,13 @@ _TIE = 1e-9
 # own devices rather than steer it.
 _ACTION_RANK = {ACTION_IDLE: 0, ACTION_USE_NET: 1, ACTION_CHARGE: 2, ACTION_DISCHARGE: 3}
 
-# (action, action_config, SoC after the slot, grid cost of the slot)
-Option = tuple[str, dict[str, Any], float, float]
+# Extra cost of discharging at full power, as a fraction of the mean price;
+# the marginal cost at full power is twice this. See the module docstring.
+_SPREAD_FRACTION = 0.03
+
+# (action, action_config, SoC after the slot, grid cost of the slot,
+#  battery cost of the slot: cycle cost and the discharge spread term)
+Option = tuple[str, dict[str, Any], float, float, float]
 
 
 @dataclass
@@ -67,6 +84,9 @@ class OptimizerSlot:
     # simulates them with their existing action and config.
     fixed_action: str | None = None
     fixed_config: dict[str, Any] = field(default_factory=dict)
+    # Length of this slot if it isn't a full one: what is left of the slot
+    # that is already running.
+    hours: float | None = None
 
     @property
     def is_fixed(self) -> bool:
@@ -92,21 +112,24 @@ class _Model:
         slot_hours: float,
         battery_kwh: float,
         charge_wattage: float,
+        discharge_wattage: float,
         efficiency: float,
+        spread_cost: float = 0.0,
     ) -> None:
         self.settings = settings
         self.h = slot_hours
         self.battery_kwh = battery_kwh
         self.cap_wh = battery_kwh * 1000.0
         self.watts = charge_wattage
+        self.discharge_watts = discharge_wattage
         self.eta = efficiency
-        # SoC % gained per W of AC charging power over one slot, and lost per
-        # W of AC discharge power.
-        self.pct_in = efficiency * slot_hours / self.cap_wh * 100.0
-        self.pct_out = slot_hours / efficiency / self.cap_wh * 100.0
+        self.spread_cost = spread_cost
+
+    def hours(self, slot: OptimizerSlot) -> float:
+        return self.h if slot.hours is None else slot.hours
 
     def cost(self, slot: OptimizerSlot, grid_w: float) -> float:
-        kwh = grid_w * self.h / 1000.0
+        kwh = grid_w * self.hours(slot) / 1000.0
         if kwh >= 0:
             return kwh * slot.price
         return kwh * (slot.injection_price or 0.0)
@@ -117,7 +140,7 @@ class _Model:
             action,
             cfg,
             slot.load_w,
-            self.h,
+            self.hours(slot),
             self.battery_kwh,
             solar_w=slot.solar_w,
             default_wattage=self.watts,
@@ -126,46 +149,60 @@ class _Model:
         )
         price_in = res.import_kwh * slot.price
         price_out = res.export_kwh * (slot.injection_price or 0.0)
-        return action, cfg, res.soc, price_in - price_out
+        return action, cfg, res.soc, price_in - price_out, 0.0
 
     def options(self, slot: OptimizerSlot, soc: float) -> list[Option]:
         if slot.is_fixed:
             return [self.simulate(slot, soc, slot.fixed_action, slot.fixed_config)]  # type: ignore[arg-type]
 
         settings = self.settings
+        h = self.hours(slot)
         net = max(slot.load_w, 0.0) - max(slot.solar_w, 0.0)
+        if h <= 0:
+            return [(ACTION_USE_NET, {"use_solar": True}, soc, self.cost(slot, net), 0.0)]
+        # SoC % gained per W of AC charging power over this slot, and lost per
+        # W of AC discharge power.
+        pct_in = self.eta * h / self.cap_wh * 100.0
+        pct_out = h / self.eta / self.cap_wh * 100.0
+        cycle = settings.cycle_cost * h / 1000.0  # per W delivered this slot
+
         # Solar surplus charges the battery in both idle and use_net.
         if net < 0:
-            b_in = min(-net, self.watts, (100.0 - soc) / self.pct_in)
-            solar_end, solar_grid = soc + b_in * self.pct_in, net + b_in
+            b_in = min(-net, self.watts, (100.0 - soc) / pct_in)
+            solar_end, solar_grid = soc + b_in * pct_in, net + b_in
         else:
             solar_end, solar_grid = soc, net
         out: list[Option] = [
-            (ACTION_USE_NET, {"use_solar": True}, solar_end, self.cost(slot, solar_grid))
+            (ACTION_USE_NET, {"use_solar": True}, solar_end, self.cost(slot, solar_grid), 0.0)
         ]
 
         if settings.allow_idle_for_optimize:
             if net > 0:
-                b_out = min(net, soc / self.pct_out)
-                end, grid_w = soc - b_out * self.pct_out, net - b_out
+                b_out = min(net, soc / pct_out)
+                end, grid_w, wear = soc - b_out * pct_out, net - b_out, b_out * cycle
             else:
-                end, grid_w = solar_end, solar_grid
-            out.append((ACTION_IDLE, {}, end, self.cost(slot, grid_w)))
+                end, grid_w, wear = solar_end, solar_grid, 0.0
+            out.append((ACTION_IDLE, {}, end, self.cost(slot, grid_w), wear))
 
         max_soc, min_soc = settings.max_battery, settings.min_battery
         if soc < max_soc - _EPS:
-            b_max = min(max(self.watts, -net), self.watts, (max_soc - soc) / self.pct_in)
-            for target in _targets(soc, soc + b_max * self.pct_in):
-                b_in = (target - soc) / self.pct_in
+            # The grid delivers self.watts; the battery gets what the house
+            # leaves of it.
+            b_max = min(self.watts - net, self.watts, (max_soc - soc) / pct_in)
+            for target in _targets(soc, soc + max(b_max, 0.0) * pct_in):
+                b_in = (target - soc) / pct_in
                 cfg = {"wattage": self.watts, "until_pct": target}
-                out.append((ACTION_CHARGE, cfg, target, self.cost(slot, net + b_in)))
+                out.append((ACTION_CHARGE, cfg, target, self.cost(slot, net + b_in), 0.0))
 
         if settings.allow_discharge and soc > min_soc + _EPS:
-            b_max = min(self.watts + max(net, 0.0), (soc - min_soc) / self.pct_out)
-            for target in _targets(soc, soc - b_max * self.pct_out):
-                b_out = (soc - target) / self.pct_out
-                cfg = {"wattage": self.watts, "until_pct": target}
-                out.append((ACTION_DISCHARGE, cfg, target, self.cost(slot, net - b_out)))
+            full = max(self.discharge_watts, net)
+            b_max = min(full, (soc - min_soc) / pct_out)
+            for target in _targets(soc, soc - b_max * pct_out):
+                b_out = (soc - target) / pct_out
+                # Steady power over the whole slot rather than a short burst.
+                cfg = {"wattage": math.ceil(b_out), "until_pct": target}
+                wear = b_out * cycle + self.spread_cost * (b_out / full) * b_out * h / 1000.0
+                out.append((ACTION_DISCHARGE, cfg, target, self.cost(slot, net - b_out), wear))
         return out
 
 
@@ -173,7 +210,7 @@ def _targets(soc: float, limit: float) -> list[float]:
     """Grid points strictly between *soc* and *limit*, plus *limit* itself."""
     if abs(limit - soc) < 1e-6:
         return []
-    step = GRID_STEP_PCT
+    step = GRID_STEP_PCT * max(1, math.ceil(abs(limit - soc) / GRID_STEP_PCT / _MAX_TARGETS))
     if limit > soc:
         k = math.floor(soc / step + 1e-9) + 1
         points = []
@@ -199,11 +236,14 @@ def optimize(
     battery_kwh: float,
     charge_wattage: float,
     roundtrip_loss_pct: float,
+    discharge_wattage: float | None = None,
 ) -> dict[str, tuple[str, dict[str, Any]]]:
     """Plan every non-fixed slot; return {key: (action, action_config)}.
 
-    *charge_wattage* is both the grid charge/discharge power the plan uses and
-    the cap on power into the battery (solar included).
+    *charge_wattage* is both the grid power a charge slot draws and the cap on
+    power into the battery (solar included). *discharge_wattage* is the most
+    the battery may deliver in a discharge slot; it defaults to the charge
+    power.
     """
     if not slots:
         return {}
@@ -214,12 +254,15 @@ def optimize(
         }
 
     eta = one_way_efficiency(roundtrip_loss_pct)
+    mean_price = sum(abs(s.price) for s in slots) / len(slots)
     model = _Model(
         settings=settings,
         slot_hours=slot_hours,
         battery_kwh=battery_kwh,
         charge_wattage=charge_wattage,
+        discharge_wattage=discharge_wattage or charge_wattage,
         efficiency=eta,
+        spread_cost=_SPREAD_FRACTION * mean_price,
     )
     min_soc = settings.min_battery
     n = int(round(100 / GRID_STEP_PCT)) + 1
@@ -231,7 +274,8 @@ def optimize(
     penalty_per_pct = (max_price + 1.0) * battery_kwh * 100
 
     def total(option: Option, start_soc: float, nxt: list[float]) -> float:
-        _, _, end_soc, cost = option
+        _, _, end_soc, cost, wear = option
+        cost += wear
         if end_soc < min_soc - 1e-6 and end_soc < start_soc + 1e-6:
             # Only penalise ending below the floor when the slot made it worse
             # (or kept it there): a slot that climbs back up is the fix.
@@ -243,7 +287,16 @@ def optimize(
 
     # Backward pass: values[t][i] = cheapest cost from slot t at SoC grid[i].
     tp = terminal_price(slots)
-    values: list[list[float]] = [[-(soc / 100 * battery_kwh) * eta * tp for soc in grid]]
+    floor_price = min(max(min(s.price for s in slots), 0.0), tp)
+    values: list[list[float]] = [
+        [
+            -(min(soc, current_soc) * tp + max(soc - current_soc, 0.0) * floor_price)
+            / 100
+            * battery_kwh
+            / eta
+            for soc in grid
+        ]
+    ]
     for slot in reversed(slots):
         nxt = values[-1]
         values.append(
@@ -266,7 +319,7 @@ def optimize(
             ):
                 best = (score, rank, opt)
         assert best is not None
-        action, cfg, end_soc, _ = best[2]
+        action, cfg, end_soc, _, _ = best[2]
         if not slot.is_fixed:
             if action in (ACTION_CHARGE, ACTION_DISCHARGE):
                 cfg = {"wattage": cfg["wattage"], "until_pct": round(end_soc, 1)}

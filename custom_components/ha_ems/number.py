@@ -16,8 +16,10 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
     ENTITY_AVG_CONSUMPTION,
+    ENTITY_CYCLE_COST,
     ENTITY_KWP,
     ENTITY_MAX_BATTERY,
+    ENTITY_MAX_DISCHARGE,
     ENTITY_MIN_BATTERY,
 )
 from .coordinator import EMSConfigEntry, EMSCoordinator
@@ -80,6 +82,29 @@ NUMBERS: tuple[EMSNumberDescription, ...] = (
         native_unit_of_measurement="kW",
         mode=NumberMode.BOX,
         icon="mdi:solar-power",
+    ),
+    EMSNumberDescription(
+        key=ENTITY_MAX_DISCHARGE,
+        translation_key=ENTITY_MAX_DISCHARGE,
+        setting="discharge_w",
+        scale=1000.0,
+        precision=3,
+        native_min_value=0.1,
+        native_max_value=50.0,
+        native_step=0.001,
+        native_unit_of_measurement="kW",
+        mode=NumberMode.BOX,
+        icon="mdi:battery-arrow-down",
+    ),
+    EMSNumberDescription(
+        key=ENTITY_CYCLE_COST,
+        translation_key=ENTITY_CYCLE_COST,
+        setting="cycle_cost",
+        native_min_value=0.0,
+        native_max_value=100.0,
+        native_step=0.01,
+        mode=NumberMode.BOX,
+        icon="mdi:battery-sync",
     ),
 )
 

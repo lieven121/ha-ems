@@ -209,8 +209,13 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
 
     @property
     def max_charge_w(self) -> float:
-        """Charge/discharge power cap (inverter limit), from the kWp setting."""
+        """Charge power cap (inverter limit), from the kWp setting."""
         return min(self.settings.kwp_w, MAX_DEFAULT_WATTAGE)
+
+    @property
+    def max_discharge_w(self) -> float:
+        """Most power the battery may deliver in a planned discharge slot."""
+        return min(self.settings.discharge_w, MAX_DEFAULT_WATTAGE)
 
     @property
     def efficiency(self) -> float:
@@ -557,12 +562,16 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         soc = current_soc
         for i in range(anchor_idx, len(slots)):
             slot = slots[i]
+            hours = slot_duration_h
+            if i == current_idx:
+                # Only what is left of the running slot can still move the SoC.
+                hours = self._remaining_hours(slot, slot_duration_h, current_time)
             soc = step_soc(
                 soc,
                 slot["action"],
                 slot.get("action_config") or {},
                 slot["load_w"],
-                slot_duration_h,
+                hours,
                 battery_size_kwh,
                 solar_w=slot["solar_w"],
                 max_charge_w=self.max_charge_w,
@@ -573,6 +582,15 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         # Past slots get no prediction
         for i in range(anchor_idx):
             slots[i]["battery_prediction"] = None
+
+    @staticmethod
+    def _remaining_hours(slot: dict, slot_duration_h: float, current_time: datetime) -> float:
+        """Hours left of *slot* at *current_time* (the full slot if not started)."""
+        start = parse_datetime(slot["start"])
+        if start is None:
+            return slot_duration_h
+        left = (start + timedelta(hours=slot_duration_h) - current_time).total_seconds() / 3600.0
+        return min(max(left, 0.0), slot_duration_h)
 
     @property
     def current_slot(self) -> dict[str, Any] | None:
@@ -961,6 +979,11 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                     load_w=slot["load_w"],
                     solar_w=slot["solar_w"],
                     injection_price=slot.get("injection_price"),
+                    hours=(
+                        self._remaining_hours(slot, slot_duration_h, current_time)
+                        if start <= current_time
+                        else None
+                    ),
                     fixed_action=existing.get("action", ACTION_IDLE) if fixed else None,
                     fixed_config=dict(existing.get("action_config") or {}) if fixed else {},
                 )
@@ -975,8 +998,9 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 current_soc=current_soc,
                 slot_hours=slot_duration_h,
                 battery_kwh=battery_kwh,
-                # Charge/discharge at the inverter limit (the kWp setting).
+                # Charge at the kWp setting; discharging has its own limit.
                 charge_wattage=self.max_charge_w if battery_kwh else 0.0,
+                discharge_wattage=self.max_discharge_w,
                 roundtrip_loss_pct=float(
                     cfg.get(CONF_ROUNDTRIP_LOSS_PCT, DEFAULT_ROUNDTRIP_LOSS_PCT)
                 ),
