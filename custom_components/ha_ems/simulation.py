@@ -88,10 +88,12 @@ def simulate_slot(
 
     - idle: self-consumption. The battery covers load the sun doesn't, and
       solar surplus charges it; the rest goes to or comes from the grid.
-    - charge: the battery charges at ``wattage`` (or the solar surplus, if
-      larger) until ``until_pct``; the house runs on solar and grid.
-    - discharge: the battery covers the house and exports ``wattage`` on top,
-      down to ``until_pct``.
+    - charge: ``wattage`` is drawn from the grid until ``until_pct``. The
+      battery gets what the house leaves of it, plus any solar surplus; a
+      house that needs more than ``wattage`` takes the rest from the battery.
+    - discharge: the battery delivers ``wattage``, or the house's need if
+      that is larger, down to ``until_pct``. What the house doesn't use is
+      exported.
     - use_net: the battery is not discharged; the house runs on solar and
       grid. Solar surplus (solar minus house and devices) charges the
       battery, unless ``use_solar`` is false: then it is exported. A
@@ -139,10 +141,14 @@ def simulate_slot(
 
     if action == ACTION_CHARGE:
         upper = until if until is not None else 100.0
-        battery_in = min(max(wattage, -net), max_in_w(upper))
+        flow = wattage - net  # what the grid target leaves for the battery
+        if flow >= 0:
+            battery_in = min(flow, max_in_w(upper))
+        else:
+            battery_out = min(-flow, max_out_w(0.0))
     elif action == ACTION_DISCHARGE:
         lower = until if until is not None else 0.0
-        battery_out = min(wattage + max(net, 0.0), max_out_w(lower))
+        battery_out = min(max(wattage, net, 0.0), max_out_w(lower))
     elif action == ACTION_USE_NET:
         max_w = _as_float(action_config.get("max_wattage"))
         need = max(net, 0.0)

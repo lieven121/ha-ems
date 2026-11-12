@@ -26,10 +26,12 @@ H = 1.0
     [
         # idle: the house load comes from the battery
         (50, ACTION_IDLE, {}, 500, 45),
-        # charge: wattage in; the house runs on the grid meanwhile
-        (50, ACTION_CHARGE, {"wattage": 3000}, 500, 80),
-        # discharge: wattage out, load out
-        (50, ACTION_DISCHARGE, {"wattage": 1000}, 500, 35),
+        # charge: wattage from the grid; the battery gets what the house leaves
+        (50, ACTION_CHARGE, {"wattage": 3000}, 500, 75),
+        # discharge: wattage out, the house's share included
+        (50, ACTION_DISCHARGE, {"wattage": 1000}, 500, 40),
+        # ...or the whole house load, if that is more
+        (50, ACTION_DISCHARGE, {"wattage": 300}, 500, 45),
         # use_net: battery untouched...
         (50, ACTION_USE_NET, {}, 500, 50),
         # ...unless the grid draw is capped below the load
@@ -45,7 +47,7 @@ def test_actions(soc, action, cfg, load_w, expected):
 
 
 def test_default_wattage_used_when_config_has_none():
-    assert step_soc(50, ACTION_CHARGE, {}, 500, H, KWH, 2000) == pytest.approx(70)
+    assert step_soc(50, ACTION_CHARGE, {}, 500, H, KWH, 2000) == pytest.approx(65)
 
 
 @pytest.mark.parametrize(
@@ -53,7 +55,7 @@ def test_default_wattage_used_when_config_has_none():
     [
         (50, ACTION_CHARGE, 60),  # stops at the target
         (70, ACTION_CHARGE, 65),  # already past it: behaves as idle
-        (50, ACTION_DISCHARGE, 40),  # stops at the floor
+        (45, ACTION_DISCHARGE, 40),  # stops at the floor
         (30, ACTION_DISCHARGE, 25),  # already below it: behaves as idle
     ],
 )
@@ -138,28 +140,37 @@ def test_use_net_without_solar_flag_holds_battery_and_exports_surplus():
     assert r.import_kwh == pytest.approx(1.0)
 
 
-def test_charge_imports_charge_and_load():
+def test_charge_wattage_is_the_grid_draw():
     r = sim(50, ACTION_CHARGE, {"wattage": 2000}, load=500)
-    assert r.soc == pytest.approx(70)
-    assert r.import_kwh == pytest.approx(2.5)
+    assert r.soc == pytest.approx(65)
+    assert r.import_kwh == pytest.approx(2.0)
 
 
-def test_charge_uses_larger_solar_surplus():
+def test_charge_adds_solar_surplus_to_the_grid_draw():
     r = sim(50, ACTION_CHARGE, {"wattage": 1000}, load=500, solar=3500)
-    assert r.soc == pytest.approx(80)
-    assert r.import_kwh == 0 and r.export_kwh == 0
+    assert r.soc == pytest.approx(90)
+    assert r.import_kwh == pytest.approx(1.0) and r.export_kwh == 0
+
+
+def test_charge_with_load_above_the_grid_draw_drains_the_battery():
+    r = sim(50, ACTION_CHARGE, {"wattage": 1000}, load=1500)
+    assert r.soc == pytest.approx(45)
+    assert r.import_kwh == pytest.approx(1.0)
 
 
 def test_charge_stops_exactly_at_target():
     r = sim(50, ACTION_CHARGE, {"wattage": 3000, "until_pct": 60}, load=500)
     assert r.soc == pytest.approx(60)
     assert r.import_kwh == pytest.approx(1.5)  # 1000 W charge + 500 W load
+    r = sim(50, ACTION_CHARGE, {"wattage": 3000, "until_pct": 90}, load=500)
+    assert r.soc == pytest.approx(75)
+    assert r.import_kwh == pytest.approx(3.0)
 
 
 def test_discharge_exports():
     r = sim(80, ACTION_DISCHARGE, {"wattage": 2000}, load=500)
-    assert r.soc == pytest.approx(55)
-    assert r.export_kwh == pytest.approx(2.0)
+    assert r.soc == pytest.approx(60)
+    assert r.export_kwh == pytest.approx(1.5)
 
 
 def test_efficiency_applies_both_ways():

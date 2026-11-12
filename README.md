@@ -48,7 +48,9 @@ If the Energy dashboard isn't set up, the plan uses a flat `Avg Consumption` and
 | `number.ems_min_battery` | Number | Minimum SoC the optimizer won't go below |
 | `number.ems_max_battery` | Number | Maximum SoC the optimizer targets |
 | `number.ems_avg_consumption` | Number | Average household load in W |
-| `number.ems_kwp` | Number | Inverter/charger power limit: the charge/discharge power the optimizer plans with, and the cap on power into the battery (solar included) |
+| `number.ems_kwp` | Number | Charge power limit: the grid power a planned charge slot draws, and the cap on power into the battery (solar included) |
+| `number.ems_max_discharge` | Number | Most power the battery may deliver in a planned discharge slot |
+| `number.ems_cycle_cost` | Number | Cost of cycling the battery, in price units per kWh discharged. The optimizer only uses the battery when the gain after losses is larger. 0 = any gain counts |
 | `switch.ems_allow_discharge` | Switch | Enable discharge slots in the optimizer |
 | `switch.ems_allow_idle_for_optimize` | Switch | Allow idle slots even when grid is cheaper than idle threshold |
 | `button.ems_optimize` | Button | Trigger a fresh optimizer run |
@@ -113,17 +115,20 @@ The optimizer runs when you press **Optimize** or call `ha_ems.planning_optimize
 3. **Energy model per action:**
    - **idle**: self-consumption. The battery covers what solar doesn't, and solar surplus charges it.
    - **use_net**: the battery is never discharged, and the house runs on solar and grid. Solar surplus (solar minus house and devices) charges the battery; with **Use Solar** off it is exported instead.
-   - **charge** / **discharge**: grid charging or exporting at the kWp power, to a target SoC.
+   - **charge**: the grid delivers the kWp power until the target SoC. The battery gets what the house leaves of it, plus any solar surplus.
+   - **discharge**: the battery delivers the given power (or the house load, if larger) down to the target SoC. What the house doesn't use is exported.
    - Round-trip loss is split evenly between charging and discharging.
 4. **Planning:** a dynamic program picks the cheapest plan over all unlocked future slots.
-   - Cost per slot = grid import × price − export × injection price.
+   - Cost per slot = grid import × price − export × injection price, plus the **Battery cycle cost** per kWh discharged.
    - It never plans below **Min Battery** if that can be avoided.
    - It grid-charges only up to **Max Battery**.
-   - Energy left at the end is valued at the cheapest quarter of the prices, so the battery isn't emptied just because tomorrow's prices are still unknown.
+   - Energy left at the end is valued at what it costs to put back: the cheapest quarter of the prices, losses included. Stored energy is only used or sold when that beats buying it again, and the battery isn't emptied just because tomorrow's prices are still unknown.
+   - Nothing is bought just to have more in the battery at the end than there is now.
+   - Discharge slots may use up to **Max discharge power**. Similar-priced slots share a discharge; a slot that stands out gets full power.
    - **Allow Discharge** enables discharge slots; **Allow Idle (Optimizer)** off means non-charge slots use the grid.
 5. **Locked and car-charge slots** are kept as they are and planned around.
 
-The battery forecast on the card (`battery_prediction`) uses the same model and updates on every refresh. The plan, and the learned profile, are persisted to HA storage and restored on restart.
+The battery forecast on the card (`battery_prediction`) uses the same model and updates on every refresh. The slot that is already running only counts for the time left in it. The plan, and the learned profile, are persisted to HA storage and restored on restart.
 
 ---
 

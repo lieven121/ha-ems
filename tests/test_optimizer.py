@@ -41,7 +41,9 @@ def slots(prices, solar=None, load=LOAD_W, inj=None, **fixed):
     return out
 
 
-def run(opt_slots, *, soc=50.0, battery_kwh=KWH, charge_w=3000.0, loss=0.0, **settings):
+def run(
+    opt_slots, *, soc=50.0, battery_kwh=KWH, charge_w=3000.0, discharge_w=None, loss=0.0, **settings
+):
     return optimize(
         opt_slots,
         settings=EMSSettings(**{"min_battery": 10.0, "max_battery": 95.0, **settings}),
@@ -49,6 +51,7 @@ def run(opt_slots, *, soc=50.0, battery_kwh=KWH, charge_w=3000.0, loss=0.0, **se
         slot_hours=1.0,
         battery_kwh=battery_kwh,
         charge_wattage=charge_w,
+        discharge_wattage=discharge_w,
         roundtrip_loss_pct=loss,
     )
 
@@ -231,6 +234,7 @@ def test_fast_model_matches_simulation():
             slot_hours=rng.choice([0.25, 1.0]),
             battery_kwh=rng.uniform(3, 20),
             charge_wattage=rng.uniform(500, 6000),
+            discharge_wattage=rng.uniform(500, 8000),
             efficiency=one_way_efficiency(rng.uniform(0, 30)),
         )
         slot = OptimizerSlot(
@@ -239,9 +243,74 @@ def test_fast_model_matches_simulation():
             load_w=rng.uniform(0, 3000),
             solar_w=rng.choice([0, rng.uniform(0, 6000)]),
             injection_price=rng.uniform(0, 10),
+            hours=rng.choice([None, 0.1]),
         )
         soc = rng.uniform(0, 100)
-        for action, cfg, end_soc, cost in model.options(slot, soc):
-            _, _, sim_soc, sim_cost = model.simulate(slot, soc, action, cfg)
+        for action, cfg, end_soc, cost, _ in model.options(slot, soc):
+            _, _, sim_soc, sim_cost, _ = model.simulate(slot, soc, action, cfg)
             assert end_soc == pytest.approx(sim_soc, abs=1e-6), (action, cfg)
             assert cost == pytest.approx(sim_cost, abs=1e-6), (action, cfg)
+
+
+def test_cycle_cost_suppresses_marginal_cycles():
+    # 20 -> 27 gains 1.6 per kWh after 20 % loss: worth it, unless cycling
+    # the battery costs more than that.
+    prices = [20, 27, 27, 27]
+    assert ACTION_CHARGE in actions(run(slots(prices), soc=10, loss=20))
+    assert ACTION_CHARGE not in actions(run(slots(prices), soc=10, loss=20, cycle_cost=3))
+
+
+def test_stored_energy_is_kept_unless_using_it_beats_buying_it_back():
+    # Cheapest quarter is 20, so with 20 % loss energy is worth 25 at the
+    # point of use: the 24 slots run on the grid, the 30 slot on the battery.
+    plan = run(slots([20, 20, 24, 30, 24, 24, 24, 24]), soc=80, loss=20)
+    assert actions(plan) == [ACTION_USE_NET] * 3 + [ACTION_IDLE] + [ACTION_USE_NET] * 4
+
+
+def test_nothing_is_bought_just_to_have_it_left_over():
+    # The last slot is the cheapest of the day, but nothing needs the energy.
+    plan = run(slots([30, 30, 30, 30, 30, 30, 30, 20], load=0), soc=50, loss=20)
+    assert ACTION_CHARGE not in actions(plan)
+
+
+def test_no_export_when_selling_does_not_beat_buying_back():
+    # Selling at 24 and re-buying at 20 loses money once losses are counted.
+    opt = slots([20, 30, 30, 30, 30, 30, 30, 30], inj=24)
+    plan = run(opt, soc=80, loss=20, allow_discharge=True, discharge_w=7000)
+    cost, _ = replay(opt, plan, soc=80, loss=20)
+    assert cost >= 0  # nothing was sold
+
+
+def test_single_peak_slot_gets_full_discharge_power():
+    opt = slots([10] * 8, inj=5, load=0)
+    opt[4].injection_price = 60
+    plan = run(opt, soc=90, allow_discharge=True, discharge_w=7000)
+    assert plan["s4"] == (ACTION_DISCHARGE, {"wattage": 7000, "until_pct": 20.0})
+    assert ACTION_DISCHARGE not in [plan[f"s{i}"][0] for i in (0, 1, 2, 3)]
+
+
+def test_similar_priced_slots_share_the_discharge():
+    opt = slots([10] * 8, inj=5, load=0)
+    for i in (2, 3, 4, 5):
+        opt[i].price, opt[i].injection_price = 70, 60
+    plan = run(opt, soc=90, allow_discharge=True, discharge_w=7000)
+    watts = [plan[f"s{i}"][1]["wattage"] for i in (2, 3, 4, 5)]
+    # 80 % of 10 kWh over four slots: about 2 kW each, not 7 kW in the first.
+    assert all(1500 <= w <= 2500 for w in watts)
+
+
+def test_discharge_power_is_not_limited_by_the_charge_power():
+    opt = slots([10, 10, 10], inj=5, load=0)
+    opt[1].injection_price = 60
+    plan = run(opt, soc=90, charge_w=2000, allow_discharge=True, discharge_w=6000)
+    assert plan["s1"][1]["wattage"] == 6000
+
+
+def test_running_slot_only_counts_for_what_is_left_of_it():
+    # 3 kW from the grid leaves 2 kW for the battery: 20 % in a full slot,
+    # 2 % in the tenth of it that is left.
+    opt = slots([5, 40, 40, 40, 40, 40, 40, 40])
+    opt[0].hours = 0.1
+    action, cfg = run(opt, soc=20)["s0"]
+    assert action == ACTION_CHARGE
+    assert cfg["until_pct"] == pytest.approx(22)
