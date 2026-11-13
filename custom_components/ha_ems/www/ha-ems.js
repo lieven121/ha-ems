@@ -132,6 +132,11 @@ header span{font-family:var(--code-font-family, monospace);font-size:10px;color:
 .ph-bulk-btn:hover{border-color:var(--accent);color:var(--accent);}
 .ph-bulk-btn ha-icon{--mdc-icon-size:16px;}
 
+/* Keyboard shortcut legend at the foot of the slot dialog; touch screens have no keys. */
+.pop-keys{display:flex;flex-wrap:wrap;gap:4px 12px;padding:10px 16px 14px;border-top:1px solid var(--border);font-family:var(--code-font-family, monospace);font-size:9px;color:var(--text-dim);}
+.pop-keys kbd{font-family:inherit;font-size:9px;border:1px solid var(--border);border-radius:3px;padding:0 4px;color:var(--text-bright);}
+@media (hover:none){.pop-keys{display:none;}}
+
 /* Popup mini nav bar */
 .pop-nav-wrap{padding:10px 16px 12px;border-bottom:1px solid var(--border);}
 .pop-nav-label{font-family:var(--code-font-family, monospace);font-size:8px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;}
@@ -259,7 +264,7 @@ header span{font-family:var(--code-font-family, monospace);font-size:10px;color:
 header[hidden]{display:none;}
 #chart-card[hidden]{display:none;}
 #stats[hidden]{display:none;}
-#day-btns[hidden]{display:none;}
+.controls[hidden]{display:none;}
 .day-btns{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
 .pl-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;align-items:center;}
 @media (max-width:480px){.pl-grid{grid-template-columns:1fr;}}
@@ -747,6 +752,24 @@ var ACTION_LABELS = {
   use_net: "Use Net",
   car_charge: "Car Charge"
 };
+function pasteTitle(cb) {
+  return cb ? `Paste & Save (${ACTION_LABELS[cb.action] ?? cb.action}) (Ctrl+V)` : "Paste & Save (Ctrl+V)";
+}
+var NAV_SHORTCUTS = [
+  ["\u2190 \u2192", "slot"],
+  ["Shift \u2190 \u2192", "day"],
+  ["Home End", "first / last"],
+  ["N", "now"],
+  ["Esc", "close"]
+];
+var EDIT_SHORTCUTS = [
+  ["1\u20135", "action"],
+  ["L", "lock"],
+  ["Ctrl S", "apply"],
+  ["Ctrl C / V", "copy / paste"],
+  ["B", "bulk"],
+  ["P", "plan"]
+];
 function renderPopup(ctx) {
   const { sr, slots, config, hass, kwpEntityId, devColors } = ctx;
   const i = ctx.slotIdx;
@@ -903,9 +926,9 @@ function renderPopup(ctx) {
         <span class="action-locked-label">Lock (keep the optimizer off this slot)</span>
       </div>
       <div class="action-btn-row">
-        <button class="action-apply-btn" id="action-apply">Apply</button>
-        <button class="action-copy-btn" id="action-copy" title="Copy slot config"><ha-icon icon="mdi:content-copy"></ha-icon></button>
-        <button class="action-paste-btn" id="action-paste" ${_clipboard ? "" : "disabled"} title="${_clipboard ? `Paste &amp; Save (${ACTION_LABELS[_clipboard.action] ?? _clipboard.action})` : "Paste &amp; Save"}"><ha-icon icon="mdi:content-paste"></ha-icon></button>
+        <button class="action-apply-btn" id="action-apply" title="Apply (Ctrl+S)">Apply</button>
+        <button class="action-copy-btn" id="action-copy" title="Copy slot config (Ctrl+C)"><ha-icon icon="mdi:content-copy"></ha-icon></button>
+        <button class="action-paste-btn" id="action-paste" ${_clipboard ? "" : "disabled"} title="${pasteTitle(_clipboard)}"><ha-icon icon="mdi:content-paste"></ha-icon></button>
       </div>
     </div>`;
   })() : `<div style="padding:0 16px 16px">
@@ -918,17 +941,17 @@ function renderPopup(ctx) {
   sr.getElementById("popup").innerHTML = `
     <div class="ph">
       <div class="ph-nav">
-        <button class="ph-nav-btn" id="pop-prev" ${i === 0 ? "disabled" : ""}>\u2039</button>
+        <button class="ph-nav-btn" id="pop-prev" title="Previous slot (\u2190)" ${i === 0 ? "disabled" : ""}>\u2039</button>
         <div>
           <div class="ph-title">Slot Details</div>
           <div class="ph-time">${slotTimeStr(slot)} \u2013 ${slotEndTimeStr(slots, i)}</div>
         </div>
-        <button class="ph-nav-btn" id="pop-next" ${i === n - 1 ? "disabled" : ""}>\u203A</button>
+        <button class="ph-nav-btn" id="pop-next" title="Next slot (\u2192)" ${i === n - 1 ? "disabled" : ""}>\u203A</button>
       </div>
       <div class="ph-actions">
-        ${deviceId || entryId ? `<button class="ph-bulk-btn" id="pop-plan" title="Schedule the car or set a battery goal"><ha-icon icon="mdi:calendar-clock"></ha-icon></button>` : ""}
-        ${deviceId || entryId ? `<button class="ph-bulk-btn" id="pop-bulk" title="Bulk edit slots">\u229E</button>` : ""}
-        <button class="ph-close" id="pop-close">\u2715</button>
+        ${deviceId || entryId ? `<button class="ph-bulk-btn" id="pop-plan" title="Schedule the car or set a battery goal (P)"><ha-icon icon="mdi:calendar-clock"></ha-icon></button>` : ""}
+        ${deviceId || entryId ? `<button class="ph-bulk-btn" id="pop-bulk" title="Bulk edit slots (B)">\u229E</button>` : ""}
+        <button class="ph-close" id="pop-close" title="Close (Esc)">\u2715</button>
       </div>
     </div>
 
@@ -1000,7 +1023,8 @@ function renderPopup(ctx) {
         <div class="dev-toggle-title">Schedule Devices</div>
         <div class="dev-toggle-list">${devToggles}</div>
       </div>`;
-  })() : ""}`;
+  })() : ""}
+    <div class="pop-keys">${[...NAV_SHORTCUTS, ...deviceId || entryId ? EDIT_SHORTCUTS : []].map(([k, label]) => `<span><kbd>${k}</kbd> ${label}</span>`).join("")}</div>`;
   sr.getElementById("pop-close").addEventListener("click", () => ctx.onClose());
   sr.getElementById("pop-bulk")?.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -1187,7 +1211,7 @@ function renderPopup(ctx) {
       const pasteBtn = sr.getElementById("action-paste");
       if (pasteBtn) {
         pasteBtn.removeAttribute("disabled");
-        pasteBtn.title = `Paste & Save (${ACTION_LABELS[selAction] ?? selAction})`;
+        pasteBtn.title = pasteTitle(_clipboard);
       }
       const copyBtn = sr.getElementById("action-copy");
       if (copyBtn) {
@@ -2315,9 +2339,8 @@ var EmsDashboardCard = class extends HTMLElement {
     for (const n of names) map[n] = DEVICE_PALETTE[i++ % DEVICE_PALETTE.length];
     this._devColors = map;
   }
-  _nowSlotIdx() {
+  _nowSlotIdx(s = this._filteredSlots) {
     const now = /* @__PURE__ */ new Date();
-    const s = this._filteredSlots;
     for (let i = 0; i < s.length; i++) {
       const t0 = new Date(s[i].start ?? s[i].time);
       const t1 = s[i + 1] ? new Date(s[i + 1].start ?? s[i + 1].time) : new Date(t0.getTime() + 36e5);
@@ -2353,7 +2376,7 @@ var EmsDashboardCard = class extends HTMLElement {
           <span id="header-date"></span>
         </header>
         <div class="stats" id="stats"></div>
-        <div class="controls">
+        <div class="controls" id="controls">
           <div class="day-btns" id="day-btns"></div>
         </div>
         <div class="chart-card" id="chart-card">
@@ -2518,6 +2541,7 @@ var EmsDashboardCard = class extends HTMLElement {
       sr.getElementById("bars").innerHTML = '<div class="empty">No schedule data available</div>';
       sr.getElementById("stats").innerHTML = "";
       sr.getElementById("day-btns").innerHTML = "";
+      sr.getElementById("controls").hidden = true;
       return;
     }
     const prices = slots.map((s) => s.price);
@@ -2546,7 +2570,7 @@ var EmsDashboardCard = class extends HTMLElement {
         style="--layer-c:${t.color}" title="${t.title}" aria-pressed="${this._layers[t.key]}">
         <ha-icon icon="${t.icon}"></ha-icon></button>`).join("");
     const dayBtns = sr.getElementById("day-btns");
-    dayBtns.hidden = !dayHtml && !toggleHtml;
+    sr.getElementById("controls").hidden = !dayHtml && !toggleHtml;
     dayBtns.innerHTML = `${dayHtml}${toggleHtml ? `<div class="layer-btns">${toggleHtml}</div>` : ""}`;
     dayBtns.querySelectorAll(".btn[data-day]").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -2671,8 +2695,9 @@ var EmsDashboardCard = class extends HTMLElement {
     }
     this._renderBrush();
   }
-  /** Switch the day from the slot dialog, keeping the same time of day. */
-  _switchDay(dayIdx) {
+  /** Switch the day from the slot dialog, keeping the same time of day
+   *  unless a slot of the new day is given. */
+  _switchDay(dayIdx, slotIdx) {
     const day = this._days[dayIdx];
     if (!day) return;
     const cur = this._activeIdx != null ? this._filteredSlots[this._activeIdx] : void 0;
@@ -2680,8 +2705,8 @@ var EmsDashboardCard = class extends HTMLElement {
       const d = new Date(s.start ?? s.time);
       return d.getHours() * 60 + d.getMinutes();
     };
-    let target = Math.min(this._activeIdx ?? 0, day.slots.length - 1);
-    if (cur) {
+    let target = Math.min(slotIdx ?? this._activeIdx ?? 0, day.slots.length - 1);
+    if (cur && slotIdx == null) {
       const want = timeOfDay(cur);
       let best = Infinity;
       day.slots.forEach((s, i) => {
@@ -2775,12 +2800,104 @@ var EmsDashboardCard = class extends HTMLElement {
     });
   }
   _onKey(e) {
-    const overlay = this.shadowRoot?.getElementById("overlay");
-    if (!overlay?.classList.contains("open")) return;
-    if (e.key === "Escape") this._closePopup();
-    if (this._activeIdx == null) return;
-    if (e.key === "ArrowLeft") this._navigateSlot(this._activeIdx - 1);
-    if (e.key === "ArrowRight") this._navigateSlot(this._activeIdx + 1);
+    const sr = this.shadowRoot;
+    if (!sr.getElementById("overlay")?.classList.contains("open")) return;
+    if (e.key === "Escape") {
+      this._closePopup();
+      return;
+    }
+    const target = e.composedPath()[0];
+    const typing = target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement && target.type !== "checkbox";
+    const mod = e.ctrlKey || e.metaKey;
+    const key = e.key.toLowerCase();
+    const click = (id) => {
+      const b = sr.getElementById(id);
+      if (!b || b.disabled) return false;
+      b.click();
+      return true;
+    };
+    const back = sr.getElementById("be-back") ?? sr.getElementById("pl-back");
+    if (back) {
+      if (mod && key === "s") {
+        e.preventDefault();
+        click("be-apply");
+      } else if (e.key === "Backspace" && !typing) {
+        e.preventDefault();
+        back.click();
+      }
+      return;
+    }
+    const i = this._activeIdx;
+    if (i == null) return;
+    if (mod) {
+      if (key === "s") {
+        e.preventDefault();
+        click("action-apply");
+      } else if (key === "c" && !typing && !this._hasTextSelection()) {
+        if (click("action-copy")) e.preventDefault();
+      } else if (key === "v" && !typing) {
+        if (click("action-paste")) e.preventDefault();
+      }
+      return;
+    }
+    if (e.key === "Enter" && typing && target.closest(".action-section")) {
+      e.preventDefault();
+      click("action-apply");
+      return;
+    }
+    if (typing || e.altKey) return;
+    const n = this._filteredSlots.length;
+    switch (e.key) {
+      case "ArrowLeft":
+        this._stepSlot(e.shiftKey ? "day" : "slot", -1);
+        break;
+      case "ArrowRight":
+        this._stepSlot(e.shiftKey ? "day" : "slot", 1);
+        break;
+      case "Home":
+        this._navigateSlot(0);
+        break;
+      case "End":
+        this._navigateSlot(n - 1);
+        break;
+      default:
+        if (key === "n") this._goToNow();
+        else if (key === "l") {
+          const lock = sr.getElementById("action-locked");
+          if (lock) lock.checked = !lock.checked;
+        } else if (key === "b") click("pop-bulk");
+        else if (key === "p") click("pop-plan");
+        else if (/^[1-9]$/.test(e.key)) {
+          sr.querySelectorAll(".ap-btn[data-action]")[+e.key - 1]?.click();
+        } else return;
+    }
+    e.preventDefault();
+  }
+  _hasTextSelection() {
+    const sel = this.shadowRoot.getSelection?.() ?? document.getSelection();
+    return !!sel && sel.toString().length > 0;
+  }
+  /** Step a slot or a day. Stepping off either end of a day continues on the
+   *  neighbouring day. */
+  _stepSlot(unit, dir) {
+    const i = this._activeIdx ?? 0;
+    if (unit === "day") {
+      this._switchDay(this._dayIdx + dir);
+      return;
+    }
+    if (i + dir >= 0 && i + dir < this._filteredSlots.length) {
+      this._navigateSlot(i + dir);
+      return;
+    }
+    const next = this._days[this._dayIdx + dir];
+    if (next) this._switchDay(this._dayIdx + dir, dir > 0 ? 0 : next.slots.length - 1);
+  }
+  _goToNow() {
+    const dayIdx = this._days.findIndex((d) => this._nowSlotIdx(d.slots) >= 0);
+    if (dayIdx < 0) return;
+    const slotIdx = this._nowSlotIdx(this._days[dayIdx].slots);
+    if (dayIdx === this._dayIdx) this._navigateSlot(slotIdx);
+    else this._switchDay(dayIdx, slotIdx);
   }
   connectedCallback() {
     document.addEventListener("keydown", this._onKeyBound);
@@ -2791,6 +2908,7 @@ var EmsDashboardCard = class extends HTMLElement {
 };
 
 // src/dashboard/dashboard-config.ts
+var DAY_NOT_FIXED = "none";
 var EDITOR_SCHEMA = [
   {
     type: "expandable",
@@ -2818,6 +2936,7 @@ var EDITOR_SCHEMA = [
         { value: "ha", label: "Home Assistant (follow card theme)" }
       ] } } },
       { name: "day", selector: { select: { options: [
+        { value: DAY_NOT_FIXED, label: "Not fixed (show Today/Tomorrow buttons)" },
         { value: "today", label: "Today" },
         { value: "tomorrow", label: "Tomorrow" }
       ], custom_value: false } } },
@@ -2896,7 +3015,7 @@ function editorHelper(schema) {
     show_price_legend: "Show the price colour legend below the chart (default: true).",
     show_action_legend: "Show the action colour legend below the chart (default: true).",
     show_device_legend: "Show the scheduled devices legend below the chart (default: true).",
-    day: "Fix the displayed day. When set, the Today/Tomorrow buttons are hidden.",
+    day: 'Fix the displayed day. When set, the Today/Tomorrow buttons are hidden. "Not fixed" shows them again.',
     device_id: "Select the EMS device. Used to read planning data and send service calls.",
     battery_entity: "Number or sensor entity for current battery state of charge (0\u2013100). Used to draw the current battery % line on the chart.",
     battery_line_color: "Color for the battery overlay lines. Defaults to a teal/cyan color.",
@@ -2933,7 +3052,12 @@ var EmsDashboardCardEditor = class extends HTMLElement {
     form.computeLabel = editorLabel;
     form.computeHelper = editorHelper;
     form.addEventListener("value-changed", (e) => {
-      this._config = e.detail.value;
+      const config = e.detail.value;
+      if (config.layout?.day === DAY_NOT_FIXED) {
+        const { day, ...layout } = config.layout;
+        config.layout = layout;
+      }
+      this._config = config;
       this.dispatchEvent(new CustomEvent("config-changed", {
         detail: { config: this._config },
         bubbles: true,
@@ -2946,7 +3070,7 @@ var EmsDashboardCardEditor = class extends HTMLElement {
   _sync() {
     if (!this._form) return;
     if (this._hass) this._form.hass = this._hass;
-    this._form.data = this._config;
+    this._form.data = this._config.layout?.day ? this._config : { ...this._config, layout: { ...this._config.layout, day: DAY_NOT_FIXED } };
   }
 };
 

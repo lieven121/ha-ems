@@ -247,9 +247,8 @@ export class EmsDashboardCard extends HTMLElement {
     this._devColors = map;
   }
 
-  _nowSlotIdx(): number {
+  _nowSlotIdx(s: Slot[] = this._filteredSlots): number {
     const now = new Date();
-    const s = this._filteredSlots;
     for (let i = 0; i < s.length; i++) {
       const t0 = new Date(s[i].start ?? s[i].time!);
       const t1 = s[i+1] ? new Date(s[i+1].start ?? s[i+1].time!) : new Date(t0.getTime() + 3600000);
@@ -630,8 +629,9 @@ export class EmsDashboardCard extends HTMLElement {
     this._renderBrush();
   }
 
-  /** Switch the day from the slot dialog, keeping the same time of day. */
-  _switchDay(dayIdx: number) {
+  /** Switch the day from the slot dialog, keeping the same time of day
+   *  unless a slot of the new day is given. */
+  _switchDay(dayIdx: number, slotIdx?: number) {
     const day = this._days[dayIdx];
     if (!day) return;
     const cur = this._activeIdx != null ? this._filteredSlots[this._activeIdx] : undefined;
@@ -639,8 +639,8 @@ export class EmsDashboardCard extends HTMLElement {
       const d = new Date(s.start ?? s.time!);
       return d.getHours() * 60 + d.getMinutes();
     };
-    let target = Math.min(this._activeIdx ?? 0, day.slots.length - 1);
-    if (cur) {
+    let target = Math.min(slotIdx ?? this._activeIdx ?? 0, day.slots.length - 1);
+    if (cur && slotIdx == null) {
       const want = timeOfDay(cur);
       let best = Infinity;
       day.slots.forEach((s, i) => {
@@ -742,13 +742,91 @@ export class EmsDashboardCard extends HTMLElement {
   }
 
   _onKey(e: KeyboardEvent) {
-    const overlay = this.shadowRoot?.getElementById('overlay');
-    if (!overlay?.classList.contains('open')) return;
-    if (e.key === 'Escape')     this._closePopup();
-    // Arrow keys step through slots; in the planner they belong to its fields.
-    if (this._activeIdx == null) return;
-    if (e.key === 'ArrowLeft')  this._navigateSlot(this._activeIdx! - 1);
-    if (e.key === 'ArrowRight') this._navigateSlot(this._activeIdx! + 1);
+    const sr = this.shadowRoot!;
+    if (!sr.getElementById('overlay')?.classList.contains('open')) return;
+    if (e.key === 'Escape') { this._closePopup(); return; }
+
+    // The real target inside the shadow root, not the retargeted host.
+    const target = e.composedPath()[0] as HTMLElement;
+    const typing = target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement
+      || (target instanceof HTMLInputElement && target.type !== 'checkbox');
+    const mod = e.ctrlKey || e.metaKey;
+    const key = e.key.toLowerCase();
+    const click = (id: string) => {
+      const b = sr.getElementById(id) as HTMLButtonElement | null;
+      if (!b || b.disabled) return false;
+      b.click();
+      return true;
+    };
+
+    // Bulk edit and planner: Ctrl+S applies (bulk edit only, the planner has
+    // two forms), Backspace goes back to the slot.
+    const back = sr.getElementById('be-back') ?? sr.getElementById('pl-back');
+    if (back) {
+      if (mod && key === 's') { e.preventDefault(); click('be-apply'); }
+      else if (e.key === 'Backspace' && !typing) { e.preventDefault(); back.click(); }
+      return;
+    }
+
+    const i = this._activeIdx;
+    if (i == null) return;
+    if (mod) {
+      if (key === 's') { e.preventDefault(); click('action-apply'); }
+      // Leave the browser's own copy and paste alone while text is involved.
+      else if (key === 'c' && !typing && !this._hasTextSelection()) { if (click('action-copy')) e.preventDefault(); }
+      else if (key === 'v' && !typing) { if (click('action-paste')) e.preventDefault(); }
+      return;
+    }
+    if (e.key === 'Enter' && typing && target.closest('.action-section')) {
+      e.preventDefault();
+      click('action-apply');
+      return;
+    }
+    if (typing || e.altKey) return;
+
+    const n = this._filteredSlots.length;
+    switch (e.key) {
+      case 'ArrowLeft':  this._stepSlot(e.shiftKey ? 'day' : 'slot', -1); break;
+      case 'ArrowRight': this._stepSlot(e.shiftKey ? 'day' : 'slot', +1); break;
+      case 'Home':       this._navigateSlot(0); break;
+      case 'End':        this._navigateSlot(n - 1); break;
+      default:
+        if (key === 'n') this._goToNow();
+        else if (key === 'l') {
+          const lock = sr.getElementById('action-locked') as HTMLInputElement | null;
+          if (lock) lock.checked = !lock.checked;
+        }
+        else if (key === 'b') click('pop-bulk');
+        else if (key === 'p') click('pop-plan');
+        else if (/^[1-9]$/.test(e.key)) {
+          (sr.querySelectorAll('.ap-btn[data-action]')[+e.key - 1] as HTMLElement | undefined)?.click();
+        }
+        else return;
+    }
+    e.preventDefault();
+  }
+
+  _hasTextSelection(): boolean {
+    const sel = (this.shadowRoot as any).getSelection?.() ?? document.getSelection();
+    return !!sel && sel.toString().length > 0;
+  }
+
+  /** Step a slot or a day. Stepping off either end of a day continues on the
+   *  neighbouring day. */
+  _stepSlot(unit: 'slot' | 'day', dir: number) {
+    const i = this._activeIdx ?? 0;
+    if (unit === 'day') { this._switchDay(this._dayIdx + dir); return; }
+    if (i + dir >= 0 && i + dir < this._filteredSlots.length) { this._navigateSlot(i + dir); return; }
+    const next = this._days[this._dayIdx + dir];
+    if (next) this._switchDay(this._dayIdx + dir, dir > 0 ? 0 : next.slots.length - 1);
+  }
+
+  _goToNow() {
+    const dayIdx = this._days.findIndex(d => this._nowSlotIdx(d.slots) >= 0);
+    if (dayIdx < 0) return;
+    const slotIdx = this._nowSlotIdx(this._days[dayIdx].slots);
+    if (dayIdx === this._dayIdx) this._navigateSlot(slotIdx);
+    else this._switchDay(dayIdx, slotIdx);
   }
 
   connectedCallback() {

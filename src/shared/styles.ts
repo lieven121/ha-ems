@@ -131,6 +131,11 @@ header span{font-family:var(--code-font-family, monospace);font-size:10px;color:
 .ph-bulk-btn:hover{border-color:var(--accent);color:var(--accent);}
 .ph-bulk-btn ha-icon{--mdc-icon-size:16px;}
 
+/* Keyboard shortcut legend at the foot of the slot dialog; touch screens have no keys. */
+.pop-keys{display:flex;flex-wrap:wrap;gap:4px 12px;padding:10px 16px 14px;border-top:1px solid var(--border);font-family:var(--code-font-family, monospace);font-size:9px;color:var(--text-dim);}
+.pop-keys kbd{font-family:inherit;font-size:9px;border:1px solid var(--border);border-radius:3px;padding:0 4px;color:var(--text-bright);}
+@media (hover:none){.pop-keys{display:none;}}
+
 /* Popup mini nav bar */
 .pop-nav-wrap{padding:10px 16px 12px;border-bottom:1px solid var(--border);}
 .pop-nav-label{font-family:var(--code-font-family, monospace);font-size:8px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;}

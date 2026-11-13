@@ -24,6 +24,20 @@ const ACTION_LABELS: Record<string, string> = {
   idle: 'Idle', charge: 'Charge', discharge: 'Discharge', use_net: 'Use Net', car_charge: 'Car Charge',
 };
 
+function pasteTitle(cb: SlotClipboard | null): string {
+  return cb ? `Paste & Save (${ACTION_LABELS[cb.action] ?? cb.action}) (Ctrl+V)` : 'Paste & Save (Ctrl+V)';
+}
+
+// Shown at the foot of the dialog; the card's key handler implements them.
+// The editing ones only apply when the card can call the integration.
+const NAV_SHORTCUTS: [string, string][] = [
+  ['← →', 'slot'], ['Shift ← →', 'day'], ['Home End', 'first / last'], ['N', 'now'], ['Esc', 'close'],
+];
+const EDIT_SHORTCUTS: [string, string][] = [
+  ['1–5', 'action'], ['L', 'lock'], ['Ctrl S', 'apply'], ['Ctrl C / V', 'copy / paste'],
+  ['B', 'bulk'], ['P', 'plan'],
+];
+
 export interface DialogContext {
   sr: ShadowRoot;
   slots: Slot[];
@@ -218,9 +232,9 @@ export function renderPopup(ctx: DialogContext): void {
         <span class="action-locked-label">Lock (keep the optimizer off this slot)</span>
       </div>
       <div class="action-btn-row">
-        <button class="action-apply-btn" id="action-apply">Apply</button>
-        <button class="action-copy-btn" id="action-copy" title="Copy slot config"><ha-icon icon="mdi:content-copy"></ha-icon></button>
-        <button class="action-paste-btn" id="action-paste" ${_clipboard ? '' : 'disabled'} title="${_clipboard ? `Paste &amp; Save (${ACTION_LABELS[_clipboard.action] ?? _clipboard.action})` : 'Paste &amp; Save'}"><ha-icon icon="mdi:content-paste"></ha-icon></button>
+        <button class="action-apply-btn" id="action-apply" title="Apply (Ctrl+S)">Apply</button>
+        <button class="action-copy-btn" id="action-copy" title="Copy slot config (Ctrl+C)"><ha-icon icon="mdi:content-copy"></ha-icon></button>
+        <button class="action-paste-btn" id="action-paste" ${_clipboard ? '' : 'disabled'} title="${pasteTitle(_clipboard)}"><ha-icon icon="mdi:content-paste"></ha-icon></button>
       </div>
     </div>`;
   })() : `<div style="padding:0 16px 16px">
@@ -234,17 +248,17 @@ export function renderPopup(ctx: DialogContext): void {
   sr.getElementById('popup')!.innerHTML = `
     <div class="ph">
       <div class="ph-nav">
-        <button class="ph-nav-btn" id="pop-prev" ${i===0?'disabled':''}>‹</button>
+        <button class="ph-nav-btn" id="pop-prev" title="Previous slot (←)" ${i===0?'disabled':''}>‹</button>
         <div>
           <div class="ph-title">Slot Details</div>
           <div class="ph-time">${slotTimeStr(slot)} – ${slotEndTimeStr(slots, i)}</div>
         </div>
-        <button class="ph-nav-btn" id="pop-next" ${i===n-1?'disabled':''}>›</button>
+        <button class="ph-nav-btn" id="pop-next" title="Next slot (→)" ${i===n-1?'disabled':''}>›</button>
       </div>
       <div class="ph-actions">
-        ${(deviceId || entryId) ? `<button class="ph-bulk-btn" id="pop-plan" title="Schedule the car or set a battery goal"><ha-icon icon="mdi:calendar-clock"></ha-icon></button>` : ''}
-        ${(deviceId || entryId) ? `<button class="ph-bulk-btn" id="pop-bulk" title="Bulk edit slots">⊞</button>` : ''}
-        <button class="ph-close" id="pop-close">✕</button>
+        ${(deviceId || entryId) ? `<button class="ph-bulk-btn" id="pop-plan" title="Schedule the car or set a battery goal (P)"><ha-icon icon="mdi:calendar-clock"></ha-icon></button>` : ''}
+        ${(deviceId || entryId) ? `<button class="ph-bulk-btn" id="pop-bulk" title="Bulk edit slots (B)">⊞</button>` : ''}
+        <button class="ph-close" id="pop-close" title="Close (Esc)">✕</button>
       </div>
     </div>
 
@@ -318,7 +332,9 @@ export function renderPopup(ctx: DialogContext): void {
         <div class="dev-toggle-title">Schedule Devices</div>
         <div class="dev-toggle-list">${devToggles}</div>
       </div>`;
-    })() : ''}`;
+    })() : ''}
+    <div class="pop-keys">${[...NAV_SHORTCUTS, ...((deviceId || entryId) ? EDIT_SHORTCUTS : [])]
+      .map(([k, label]) => `<span><kbd>${k}</kbd> ${label}</span>`).join('')}</div>`;
 
   // Wire up popup events
   sr.getElementById('pop-close')!.addEventListener('click', () => ctx.onClose());
@@ -468,7 +484,7 @@ export function renderPopup(ctx: DialogContext): void {
       const pasteBtn = sr.getElementById('action-paste') as HTMLButtonElement | null;
       if (pasteBtn) {
         pasteBtn.removeAttribute('disabled');
-        pasteBtn.title = `Paste & Save (${ACTION_LABELS[selAction] ?? selAction})`;
+        pasteBtn.title = pasteTitle(_clipboard);
       }
       const copyBtn = sr.getElementById('action-copy') as HTMLButtonElement | null;
       if (copyBtn) {

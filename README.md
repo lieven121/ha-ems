@@ -94,7 +94,7 @@ device_id: <your_ems_device_id>
 | Action strip | Per-slot action indicator with colour coding |
 | 24 h brush | Compact timeline — click to jump |
 | Slot popup | Edit any slot's action and parameters inline |
-| Keyboard nav | ← / → to step; Esc to close |
+| Keyboard | ← / → step a slot (continuing onto the next or previous day), Shift+← / → step a day, Home / End first or last slot, N now; 1–5 pick an action, L toggles lock, Ctrl+S (or Enter in a field) applies, Ctrl+C / Ctrl+V copy and paste-and-save a slot, B bulk edit, P plan, Esc close. In bulk edit and the planner, Backspace goes back to the slot and Ctrl+S applies the bulk edit. |
 | Day switch | Today / Tomorrow buttons in the slot dialog; switching keeps the time of day |
 | Solar & load | Solar forecast (yellow) and predicted house load (purple) behind the bars; `layout.show_forecast: false` hides them |
 | Layer toggles | Solar, house load and battery icon buttons next to Today / Tomorrow show or hide each overlay |
