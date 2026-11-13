@@ -258,7 +258,7 @@ header span{font-family:var(--code-font-family, monospace);font-size:10px;color:
 header[hidden]{display:none;}
 #chart-card[hidden]{display:none;}
 #stats[hidden]{display:none;}
-#day-btns[hidden]{display:none;}
+.controls[hidden]{display:none;}
 .day-btns{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
 .pl-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;align-items:center;}
 @media (max-width:480px){.pl-grid{grid-template-columns:1fr;}}

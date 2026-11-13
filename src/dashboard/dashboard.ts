@@ -286,7 +286,7 @@ export class EmsDashboardCard extends HTMLElement {
           <span id="header-date"></span>
         </header>
         <div class="stats" id="stats"></div>
-        <div class="controls">
+        <div class="controls" id="controls">
           <div class="day-btns" id="day-btns"></div>
         </div>
         <div class="chart-card" id="chart-card">
@@ -458,6 +458,7 @@ export class EmsDashboardCard extends HTMLElement {
       sr.getElementById('bars')!.innerHTML = '<div class="empty">No schedule data available</div>';
       sr.getElementById('stats')!.innerHTML = '';
       sr.getElementById('day-btns')!.innerHTML = '';
+      (sr.getElementById('controls') as HTMLElement).hidden = true;
       return;
     }
 
@@ -490,7 +491,8 @@ export class EmsDashboardCard extends HTMLElement {
         <ha-icon icon="${t.icon}"></ha-icon></button>`).join('');
 
     const dayBtns = sr.getElementById('day-btns')!;
-    dayBtns.hidden    = !dayHtml && !toggleHtml;
+    // Nothing to show: drop the whole row, margin included.
+    (sr.getElementById('controls') as HTMLElement).hidden = !dayHtml && !toggleHtml;
     dayBtns.innerHTML = `${dayHtml}${toggleHtml ? `<div class="layer-btns">${toggleHtml}</div>` : ''}`;
     dayBtns.querySelectorAll('.btn[data-day]').forEach(btn => {
       btn.addEventListener('click', () => {

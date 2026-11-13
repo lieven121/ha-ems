@@ -1,3 +1,7 @@
+// The select can't be cleared, so "not fixed" is an option of its own. The
+// editor shows it when no day is set and drops it from the saved config.
+const DAY_NOT_FIXED = 'none';
+
 export const EDITOR_SCHEMA = [
   {
     type: 'expandable',
@@ -25,6 +29,7 @@ export const EDITOR_SCHEMA = [
         { value: 'ha',     label: 'Home Assistant (follow card theme)' },
       ] } } },
       { name: 'day',          selector: { select: { options: [
+        { value: DAY_NOT_FIXED, label: 'Not fixed (show Today/Tomorrow buttons)' },
         { value: 'today',    label: 'Today' },
         { value: 'tomorrow', label: 'Tomorrow' },
       ], custom_value: false } } },
@@ -105,7 +110,7 @@ export function editorHelper(schema: any): string {
     show_price_legend:   'Show the price colour legend below the chart (default: true).',
     show_action_legend:  'Show the action colour legend below the chart (default: true).',
     show_device_legend:  'Show the scheduled devices legend below the chart (default: true).',
-    day:                 'Fix the displayed day. When set, the Today/Tomorrow buttons are hidden.',
+    day:                 'Fix the displayed day. When set, the Today/Tomorrow buttons are hidden. "Not fixed" shows them again.',
     device_id:           'Select the EMS device. Used to read planning data and send service calls.',
     battery_entity:      'Number or sensor entity for current battery state of charge (0–100). Used to draw the current battery % line on the chart.',
     battery_line_color:  'Color for the battery overlay lines. Defaults to a teal/cyan color.',
@@ -155,7 +160,12 @@ export class EmsDashboardCardEditor extends HTMLElement {
     form.computeHelper = editorHelper;
 
     form.addEventListener('value-changed', (e: any) => {
-      this._config = e.detail.value;
+      const config = e.detail.value;
+      if (config.layout?.day === DAY_NOT_FIXED) {
+        const { day, ...layout } = config.layout;
+        config.layout = layout;
+      }
+      this._config = config;
       this.dispatchEvent(new CustomEvent('config-changed', {
         detail: { config: this._config },
         bubbles: true,
@@ -170,6 +180,7 @@ export class EmsDashboardCardEditor extends HTMLElement {
   _sync() {
     if (!this._form) return;
     if (this._hass) this._form.hass = this._hass;
-    this._form.data = this._config;
+    this._form.data = this._config.layout?.day ? this._config
+      : { ...this._config, layout: { ...this._config.layout, day: DAY_NOT_FIXED } };
   }
 }
