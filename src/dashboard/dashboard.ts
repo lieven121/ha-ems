@@ -288,7 +288,6 @@ export class EmsDashboardCard extends HTMLElement {
         <div class="stats" id="stats"></div>
         <div class="controls">
           <div class="day-btns" id="day-btns"></div>
-          <button class="btn plan-btn" id="plan-btn" title="Schedule the car or set a battery goal" hidden>⚡ Plan</button>
         </div>
         <div class="chart-card" id="chart-card">
           <div class="y-axis" id="y-axis" style="height:${CHART_H + 24}px"></div>
@@ -326,9 +325,7 @@ export class EmsDashboardCard extends HTMLElement {
 
     this.shadowRoot!.getElementById('overlay')!.addEventListener('click', (e: Event) => {
       if ((e.target as HTMLElement).id === 'overlay') this._closePopup();
-    });
-    this.shadowRoot!.getElementById('plan-btn')!.addEventListener('click', () => this._openPlanner());
-  }
+    });  }
 
   _render() {
     const sr = this.shadowRoot;
@@ -455,10 +452,6 @@ export class EmsDashboardCard extends HTMLElement {
       debugEl.hidden = true;
       debugEl.innerHTML = '';
     }
-
-    // The planner calls the integration's services, so it needs the device.
-    const canPlan = !!(this._config.integration?.device_id || this._config.integration?.entry_id);
-    (sr.getElementById('plan-btn') as HTMLElement).hidden = !canPlan || this._slots.length === 0;
 
     // ── Chart ────────────────────────────────────────────────────────────────
     if (!n) {
@@ -687,6 +680,7 @@ export class EmsDashboardCard extends HTMLElement {
       onClose: () => this._closePopup(),
       onNavigate: (j) => this._navigateSlot(j),
       onBulkEdit: () => this._openBulkEdit(i),
+      onPlan: () => this._openPlanner(i),
       days: this._dayLabels(),
       onSwitchDay: (d) => this._switchDay(d),
     });
@@ -724,7 +718,9 @@ export class EmsDashboardCard extends HTMLElement {
     });
   }
 
-  _openPlanner() {
+  _openPlanner(fromIdx: number) {
+    // Like bulk edit, the planner is reached from the slot dialog and swaps
+    // the popup content in place.
     this._activeIdx = null;
     this.shadowRoot!.getElementById('tooltip')!.classList.remove('visible');
     renderPlanner({
@@ -735,12 +731,12 @@ export class EmsDashboardCard extends HTMLElement {
       kwpEntityId: this._kwpEntityId,
       planningEntityId: this._planningEntityId,
       onClose: () => this._closePopup(),
+      onBack: () => this._renderPopup(fromIdx),
       onApplied: () => {
         this._lastSer = '';
         this.hass = this._hass;
       },
     });
-    this.shadowRoot!.getElementById('overlay')!.classList.add('open');
   }
 
   _onKey(e: KeyboardEvent) {

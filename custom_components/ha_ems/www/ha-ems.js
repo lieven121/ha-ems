@@ -130,6 +130,7 @@ header span{font-family:var(--code-font-family, monospace);font-size:10px;color:
 .ph-actions{display:flex;align-items:center;gap:6px;flex-shrink:0;}
 .ph-bulk-btn{background:none;border:1px solid var(--border);color:var(--text-dim);width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .12s;flex-shrink:0;}
 .ph-bulk-btn:hover{border-color:var(--accent);color:var(--accent);}
+.ph-bulk-btn ha-icon{--mdc-icon-size:16px;}
 
 /* Popup mini nav bar */
 .pop-nav-wrap{padding:10px 16px 12px;border-bottom:1px solid var(--border);}
@@ -260,8 +261,6 @@ header[hidden]{display:none;}
 #stats[hidden]{display:none;}
 #day-btns[hidden]{display:none;}
 .day-btns{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
-.plan-btn{margin-left:auto;}
-.plan-btn[hidden]{display:none;}
 .pl-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;align-items:center;}
 @media (max-width:480px){.pl-grid{grid-template-columns:1fr;}}
 .pl-note{font-family:var(--code-font-family,monospace);font-size:10px;color:var(--text-dim);margin-bottom:8px;}
@@ -927,6 +926,7 @@ function renderPopup(ctx) {
         <button class="ph-nav-btn" id="pop-next" ${i === n - 1 ? "disabled" : ""}>\u203A</button>
       </div>
       <div class="ph-actions">
+        ${deviceId || entryId ? `<button class="ph-bulk-btn" id="pop-plan" title="Schedule the car or set a battery goal"><ha-icon icon="mdi:calendar-clock"></ha-icon></button>` : ""}
         ${deviceId || entryId ? `<button class="ph-bulk-btn" id="pop-bulk" title="Bulk edit slots">\u229E</button>` : ""}
         <button class="ph-close" id="pop-close">\u2715</button>
       </div>
@@ -1005,6 +1005,10 @@ function renderPopup(ctx) {
   sr.getElementById("pop-bulk")?.addEventListener("click", (e) => {
     e.stopPropagation();
     ctx.onBulkEdit();
+  });
+  sr.getElementById("pop-plan")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    ctx.onPlan();
   });
   sr.getElementById("pop-prev").addEventListener("click", (e) => {
     e.stopPropagation();
@@ -1891,7 +1895,10 @@ function renderPlanner(ctx) {
   const goalHtml = goal ? `<div class="pl-note">Active goal: <b>${goal.target_pct.toFixed(0)} %</b> by <b>${dayTimeLabel(new Date(goal.by))}</b></div>` : '<div class="pl-note">No goal set.</div>';
   sr.getElementById("popup").innerHTML = `
     <div class="be-header">
-      <span class="be-title">\u26A1 Plan</span>
+      <div class="be-header-left">
+        <button class="be-back" id="pl-back" title="Back to slot">\u2039</button>
+        <span class="be-title">\u26A1 Plan</span>
+      </div>
       <button class="be-close" id="pl-close">\u2715</button>
     </div>
 
@@ -2112,6 +2119,7 @@ function renderPlanner(ctx) {
     }
   });
   sr.getElementById("pl-close").addEventListener("click", () => ctx.onClose());
+  sr.getElementById("pl-back").addEventListener("click", () => ctx.onBack());
   sr.querySelectorAll("#popup .param-input").forEach((el) => el.addEventListener("click", (e) => e.stopPropagation()));
   renderCar();
   renderBattery();
@@ -2347,7 +2355,6 @@ var EmsDashboardCard = class extends HTMLElement {
         <div class="stats" id="stats"></div>
         <div class="controls">
           <div class="day-btns" id="day-btns"></div>
-          <button class="btn plan-btn" id="plan-btn" title="Schedule the car or set a battery goal" hidden>\u26A1 Plan</button>
         </div>
         <div class="chart-card" id="chart-card">
           <div class="y-axis" id="y-axis" style="height:${CHART_H + 24}px"></div>
@@ -2385,7 +2392,6 @@ var EmsDashboardCard = class extends HTMLElement {
     this.shadowRoot.getElementById("overlay").addEventListener("click", (e) => {
       if (e.target.id === "overlay") this._closePopup();
     });
-    this.shadowRoot.getElementById("plan-btn").addEventListener("click", () => this._openPlanner());
   }
   _render() {
     const sr = this.shadowRoot;
@@ -2508,8 +2514,6 @@ var EmsDashboardCard = class extends HTMLElement {
       debugEl.hidden = true;
       debugEl.innerHTML = "";
     }
-    const canPlan = !!(this._config.integration?.device_id || this._config.integration?.entry_id);
-    sr.getElementById("plan-btn").hidden = !canPlan || this._slots.length === 0;
     if (!n) {
       sr.getElementById("bars").innerHTML = '<div class="empty">No schedule data available</div>';
       sr.getElementById("stats").innerHTML = "";
@@ -2720,6 +2724,7 @@ var EmsDashboardCard = class extends HTMLElement {
       onClose: () => this._closePopup(),
       onNavigate: (j) => this._navigateSlot(j),
       onBulkEdit: () => this._openBulkEdit(i),
+      onPlan: () => this._openPlanner(i),
       days: this._dayLabels(),
       onSwitchDay: (d) => this._switchDay(d)
     });
@@ -2751,7 +2756,7 @@ var EmsDashboardCard = class extends HTMLElement {
       }
     });
   }
-  _openPlanner() {
+  _openPlanner(fromIdx) {
     this._activeIdx = null;
     this.shadowRoot.getElementById("tooltip").classList.remove("visible");
     renderPlanner({
@@ -2762,12 +2767,12 @@ var EmsDashboardCard = class extends HTMLElement {
       kwpEntityId: this._kwpEntityId,
       planningEntityId: this._planningEntityId,
       onClose: () => this._closePopup(),
+      onBack: () => this._renderPopup(fromIdx),
       onApplied: () => {
         this._lastSer = "";
         this.hass = this._hass;
       }
     });
-    this.shadowRoot.getElementById("overlay").classList.add("open");
   }
   _onKey(e) {
     const overlay = this.shadowRoot?.getElementById("overlay");

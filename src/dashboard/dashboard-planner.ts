@@ -10,6 +10,7 @@ export interface PlannerContext {
   kwpEntityId: string | null;
   planningEntityId: string | null;
   onClose: () => void;
+  onBack: () => void;
   onApplied: () => void;
 }
 
@@ -76,7 +77,10 @@ export function renderPlanner(ctx: PlannerContext): void {
 
   sr.getElementById('popup')!.innerHTML = `
     <div class="be-header">
-      <span class="be-title">⚡ Plan</span>
+      <div class="be-header-left">
+        <button class="be-back" id="pl-back" title="Back to slot">‹</button>
+        <span class="be-title">⚡ Plan</span>
+      </div>
       <button class="be-close" id="pl-close">✕</button>
     </div>
 
@@ -312,6 +316,7 @@ export function renderPlanner(ctx: PlannerContext): void {
   });
 
   sr.getElementById('pl-close')!.addEventListener('click', () => ctx.onClose());
+  sr.getElementById('pl-back')!.addEventListener('click', () => ctx.onBack());
   // Clicks inside the form must not reach the overlay's close handler.
   sr.querySelectorAll('#popup .param-input').forEach(el =>
     el.addEventListener('click', (e: Event) => e.stopPropagation()));

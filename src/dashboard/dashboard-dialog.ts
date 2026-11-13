@@ -37,6 +37,7 @@ export interface DialogContext {
   onClose: () => void;
   onNavigate: (i: number) => void;
   onBulkEdit: () => void;
+  onPlan: () => void;
   /** Days the dialog can switch between; hidden when there is only one. */
   days: { label: string; active: boolean }[];
   onSwitchDay: (dayIdx: number) => void;
@@ -241,6 +242,7 @@ export function renderPopup(ctx: DialogContext): void {
         <button class="ph-nav-btn" id="pop-next" ${i===n-1?'disabled':''}>›</button>
       </div>
       <div class="ph-actions">
+        ${(deviceId || entryId) ? `<button class="ph-bulk-btn" id="pop-plan" title="Schedule the car or set a battery goal"><ha-icon icon="mdi:calendar-clock"></ha-icon></button>` : ''}
         ${(deviceId || entryId) ? `<button class="ph-bulk-btn" id="pop-bulk" title="Bulk edit slots">⊞</button>` : ''}
         <button class="ph-close" id="pop-close">✕</button>
       </div>
@@ -321,6 +323,7 @@ export function renderPopup(ctx: DialogContext): void {
   // Wire up popup events
   sr.getElementById('pop-close')!.addEventListener('click', () => ctx.onClose());
   sr.getElementById('pop-bulk')?.addEventListener('click', (e: Event) => { e.stopPropagation(); ctx.onBulkEdit(); });
+  sr.getElementById('pop-plan')?.addEventListener('click', (e: Event) => { e.stopPropagation(); ctx.onPlan(); });
   sr.getElementById('pop-prev')!.addEventListener('click', (e: Event) => { e.stopPropagation(); ctx.onNavigate(i-1); });
   sr.getElementById('pop-next')!.addEventListener('click', (e: Event) => { e.stopPropagation(); ctx.onNavigate(i+1); });
 

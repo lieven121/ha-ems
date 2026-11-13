@@ -129,6 +129,7 @@ header span{font-family:var(--code-font-family, monospace);font-size:10px;color:
 .ph-actions{display:flex;align-items:center;gap:6px;flex-shrink:0;}
 .ph-bulk-btn{background:none;border:1px solid var(--border);color:var(--text-dim);width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .12s;flex-shrink:0;}
 .ph-bulk-btn:hover{border-color:var(--accent);color:var(--accent);}
+.ph-bulk-btn ha-icon{--mdc-icon-size:16px;}
 
 /* Popup mini nav bar */
 .pop-nav-wrap{padding:10px 16px 12px;border-bottom:1px solid var(--border);}
@@ -259,8 +260,6 @@ header[hidden]{display:none;}
 #stats[hidden]{display:none;}
 #day-btns[hidden]{display:none;}
 .day-btns{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
-.plan-btn{margin-left:auto;}
-.plan-btn[hidden]{display:none;}
 .pl-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;align-items:center;}
 @media (max-width:480px){.pl-grid{grid-template-columns:1fr;}}
 .pl-note{font-family:var(--code-font-family,monospace);font-size:10px;color:var(--text-dim);margin-bottom:8px;}
