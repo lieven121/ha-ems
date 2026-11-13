@@ -276,3 +276,48 @@ async def test_bulk_lock_only_keeps_the_action(hass: HomeAssistant, ems) -> None
     )
     slot = _slots(hass, ems)[1]
     assert (slot["action"], slot["locked"]) == ("use_net", True)
+
+
+async def test_charge_car_by_energy_picks_the_cheapest_slots(hass: HomeAssistant, ems) -> None:
+    # 9 kWh at 3 kW is three hourly slots; before 06:00 the cheapest three
+    # are the night hours at 5.0.
+    await hass.services.async_call(
+        DOMAIN,
+        "planning_charge_car",
+        {
+            "device_id": _device_id(hass, ems),
+            "stop_time": "2026-06-16T06:00:00-07:00",
+            "energy_kwh": 9,
+            "use_net_wattage": 3000,
+        },
+        blocking=True,
+    )
+    car = [s for s in _slots(hass, ems) if s["action"] == "car_charge"]
+    assert [s["price"] for s in car] == [5.0, 5.0, 5.0]
+    assert all(s["action_config"]["use_net_wattage"] == 3000 for s in car)
+
+
+async def test_battery_goal_is_planned_for_and_can_be_cleared(hass: HomeAssistant, ems) -> None:
+    device_id = _device_id(hass, ems)
+    by = "2026-06-16T01:00:00-07:00"  # before the cheap hours even start
+    await hass.services.async_call(
+        DOMAIN,
+        "planning_battery_goal",
+        {"device_id": device_id, "target_pct": 90, "by": by},
+        blocking=True,
+    )
+    state = hass.states.get(_entity_id(hass, ems, "ems_planning"))
+    assert state.attributes["battery_goal"]["target_pct"] == 90
+    deadline = dt_util.parse_datetime(by)
+    last = [
+        s
+        for s in _slots(hass, ems)
+        if dt_util.parse_datetime(s["start"]) + timedelta(hours=1) == deadline
+    ]
+    assert len(last) == 1 and last[0]["battery_prediction"] >= 90 - 0.5
+
+    await hass.services.async_call(
+        DOMAIN, "planning_battery_goal", {"device_id": device_id}, blocking=True
+    )
+    state = hass.states.get(_entity_id(hass, ems, "ems_planning"))
+    assert state.attributes["battery_goal"] is None

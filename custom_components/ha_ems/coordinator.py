@@ -83,6 +83,9 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         # Planning dict: raw_start_str → {action, locked, action_config, devices}
         # where devices is {device_name: {"wattage": float}}
         self._planning: dict[str, dict[str, Any]] = {}
+        # {"target_pct": float, "by": iso str}: the optimiser must have the
+        # battery at target_pct by then. Dropped once the deadline has passed.
+        self._battery_goal: dict[str, Any] | None = None
 
         # Live-editable values (backed by number/switch entities)
         self.settings = EMSSettings()
@@ -311,6 +314,7 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         stored = await self._store.async_load()
         if stored and isinstance(stored, dict):
             self._planning = stored.get("planning", {})
+            self._battery_goal = stored.get("battery_goal") or None
             self.load_profile = LoadProfile.from_dict(stored.get("profile"))
             _LOGGER.debug(
                 "Loaded %d planning overrides from storage", len(self._planning)
@@ -325,7 +329,11 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         self._store.async_delay_save(self._stored_data, _SAVE_DELAY_S)
 
     def _stored_data(self) -> dict[str, Any]:
-        return {"planning": self._planning, "profile": self.load_profile.as_dict()}
+        return {
+            "planning": self._planning,
+            "profile": self.load_profile.as_dict(),
+            "battery_goal": self._battery_goal,
+        }
 
     def async_start_price_tracking(self) -> None:
         """Track the price entity so we refresh as soon as it becomes available.
@@ -622,6 +630,12 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         day's worth of slots every day. Unparseable keys are dropped too: no
         price slot can ever match them.
         """
+        if self._battery_goal is not None:
+            by = parse_datetime(str(self._battery_goal.get("by")))
+            if by is None or as_local(by) <= now():
+                self._battery_goal = None
+                self._async_save_planning()
+
         cutoff = now() - _PLANNING_RETENTION
         stale = []
         for key in self._planning:
@@ -881,33 +895,51 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
 
     async def async_charge_car(
         self,
-        start_time: str,
+        start_time: str | None,
         stop_time: str,
-        max_price: float,
-        slots_wanted: int,
+        max_price: float | None = None,
+        slots_wanted: int | None = None,
         use_solar: bool = True,
         use_net_wattage: float | None = None,
         use_battery_wattage: float | None = None,
         use_battery_until_pct: float | None = None,
+        energy_kwh: float | None = None,
     ) -> None:
-        """Select cheapest slots within window for car charging."""
+        """Select cheapest slots within window for car charging.
+
+        The amount is either *slots_wanted* or *energy_kwh*; the latter is
+        turned into slots using *use_net_wattage* as the car's charging power.
+        Without *start_time* the window starts now, and without *max_price*
+        any price will do.
+        """
+        if (slots_wanted is None) == (energy_kwh is None):
+            raise ServiceValidationError("Give either slots_wanted or energy_kwh")
+        if energy_kwh is not None and not (use_net_wattage and use_net_wattage > 0):
+            raise ServiceValidationError("energy_kwh needs use_net_wattage, the charging power")
+
         slots = self._build_slots()
         if not slots:
             return
 
         slot_duration_h = self._slot_duration_from_slots(slots)
-        start_dt = parse_datetime(start_time)
+        current_time = now()
+        start_dt = parse_datetime(start_time) if start_time else current_time
         stop_dt = parse_datetime(stop_time)
         if start_dt is None or stop_dt is None:
             raise ServiceValidationError(
                 f"Invalid start/stop for car charging: {start_time!r} / {stop_time!r}"
             )
+        start_dt, stop_dt = as_local(start_dt), as_local(stop_dt)
+        if energy_kwh is not None:
+            per_slot_kwh = use_net_wattage * slot_duration_h / 1000.0  # type: ignore[operator]
+            slots_wanted = max(1, math.ceil(energy_kwh / per_slot_kwh - 1e-9))
 
-        current_time = now()
         candidates = []
         for slot in slots:
             ts = parse_datetime(slot["start"])
-            if ts is None or not start_dt <= ts < stop_dt:
+            # The slot has to fit in the window; one that is already running
+            # when the window opens still counts.
+            if ts is None or ts + timedelta(hours=slot_duration_h) <= start_dt or ts >= stop_dt:
                 continue
             key = slot["start"]
             existing = self._planning.get(key, {})
@@ -921,7 +953,7 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 # instead of adding to it.
                 existing["action"] = ACTION_IDLE
                 existing["action_config"] = {}
-            if slot["price"] <= max_price:
+            if max_price is None or slot["price"] <= max_price:
                 candidates.append(slot)
 
         candidates.sort(key=lambda s: s["price"])
@@ -943,6 +975,54 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
             }
 
         await self._async_commit()
+
+    @property
+    def battery_goal(self) -> dict[str, Any] | None:
+        """The standing battery goal, {"target_pct", "by"}, if there is one."""
+        return dict(self._battery_goal) if self._battery_goal else None
+
+    async def async_set_battery_goal(self, target_pct: float | None, by: str | None) -> None:
+        """Set (or, without a target, clear) the battery goal and re-plan."""
+        if target_pct is None:
+            self._battery_goal = None
+        else:
+            by_dt = parse_datetime(by) if by else None
+            if by_dt is None:
+                raise ServiceValidationError(f"Invalid time for the battery goal: {by!r}")
+            by_dt = as_local(by_dt)
+            if by_dt <= now():
+                raise ServiceValidationError("The battery goal must lie in the future")
+            self._battery_goal = {"target_pct": float(target_pct), "by": by_dt.isoformat()}
+        self._async_save_planning()
+        await self.async_optimize()
+
+    def _soc_goal(
+        self, slots: list[dict], slot_duration_h: float, current_time: datetime
+    ) -> tuple[str, float] | None:
+        """The goal as (key of the last slot ending by the deadline, target %).
+
+        None while the deadline lies beyond the published prices: aiming for
+        the last known slot instead would charge a day too early.
+        """
+        if not self._battery_goal:
+            return None
+        by = parse_datetime(str(self._battery_goal.get("by")))
+        if by is None or not slots:
+            return None
+        by = as_local(by)
+        duration = timedelta(hours=slot_duration_h)
+        last_end = (parse_datetime(slots[-1]["start"]) or current_time) + duration
+        if by > last_end:
+            return None
+        key = None
+        for slot in slots:
+            start = parse_datetime(slot["start"])
+            if start is None or start + duration <= current_time:
+                continue
+            if start + duration > by:
+                break
+            key = slot["start"]
+        return (key, float(self._battery_goal["target_pct"])) if key else None
 
     async def async_optimize(self) -> None:
         """Re-plan every unlocked future slot; see optimizer.optimize."""
@@ -1001,6 +1081,7 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 # Charge at the kWp setting; discharging has its own limit.
                 charge_wattage=self.max_charge_w if battery_kwh else 0.0,
                 discharge_wattage=self.max_discharge_w,
+                soc_goal=self._soc_goal(slots, slot_duration_h, current_time),
                 roundtrip_loss_pct=float(
                     cfg.get(CONF_ROUNDTRIP_LOSS_PCT, DEFAULT_ROUNDTRIP_LOSS_PCT)
                 ),

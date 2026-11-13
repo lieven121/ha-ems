@@ -259,6 +259,15 @@ header[hidden]{display:none;}
 #chart-card[hidden]{display:none;}
 #stats[hidden]{display:none;}
 #day-btns[hidden]{display:none;}
+.day-btns{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.plan-btn{margin-left:auto;}
+.plan-btn[hidden]{display:none;}
+.pl-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;align-items:center;}
+@media (max-width:480px){.pl-grid{grid-template-columns:1fr;}}
+.pl-note{font-family:var(--code-font-family,monospace);font-size:10px;color:var(--text-dim);margin-bottom:8px;}
+.pl-note b{color:var(--text-bright);}
+.pl-preview{margin-top:10px;}
+.pl-btn-row{display:flex;gap:8px;margin-top:10px;}
 .legend-wrap[hidden]{display:none;}
 
 /* \u2500\u2500 Bulk Edit Modal \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
@@ -608,6 +617,7 @@ function renderBatteryOverlay(sr, slots, config, hass, planningEntityId, visible
         const y = (1 - currentPct / 100) * CHART_H;
         svgContent += `<line x1="0" y1="${y}" x2="100" y2="${y}" stroke="${lineColor}" stroke-width="1.5" stroke-dasharray="2 3" opacity="0.7" vector-effect="non-scaling-stroke"/>`;
       }
+      if (enabled) svgContent += renderGoal(slots, config, hass, planningEntityId, lineColor);
       battSvg.innerHTML = svgContent;
       battSvg.removeAttribute("hidden");
     } else {
@@ -631,6 +641,22 @@ function renderBatteryOverlay(sr, slots, config, hass, planningEntityId, visible
       battAxis.setAttribute("hidden", "");
     }
   }
+}
+function renderGoal(slots, config, hass, planningEntityId, color) {
+  const planEntity = planningEntityId || config.integration?.planning_entity;
+  const goal = (planEntity ? hass?.states[planEntity]?.attributes?.battery_goal : null) ?? null;
+  const n = slots.length;
+  if (!goal || n < 2) return "";
+  const by = new Date(goal.by).getTime();
+  const start = (s) => new Date(s.start ?? s.time).getTime();
+  const dur = start(slots[1]) - start(slots[0]);
+  let idx = -1;
+  for (let i = 0; i < n; i++) if (start(slots[i]) + dur <= by) idx = i;
+  if (idx < 0 || by > start(slots[n - 1]) + dur) return "";
+  const y = (1 - Math.max(0, Math.min(100, goal.target_pct)) / 100) * CHART_H;
+  const x0 = idx / n * 100;
+  const x1 = (idx + 1) / n * 100;
+  return `<line x1="${x1}" y1="${y}" x2="${x1}" y2="${CHART_H}" stroke="${color}" stroke-width="1" opacity="0.6" vector-effect="non-scaling-stroke"/><line x1="${x0}" y1="${y}" x2="${x1}" y2="${y}" stroke="${color}" stroke-width="4" vector-effect="non-scaling-stroke"/>`;
 }
 function renderForecast(slots, config, visible) {
   const n = slots.length;
@@ -1814,6 +1840,283 @@ function renderBulkEdit(ctx) {
   renderRangeUI();
 }
 
+// src/dashboard/dashboard-planner.ts
+var POWER_KEY = "ha-ems-car-power-w";
+function slotStart(slot) {
+  return new Date(slot.start ?? slot.time).getTime();
+}
+function nextOccurrence(hhmm, after) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm);
+  if (!m) return null;
+  const d = new Date(after);
+  d.setHours(+m[1], +m[2], 0, 0);
+  if (d.getTime() <= after.getTime()) d.setDate(d.getDate() + 1);
+  return d;
+}
+function dayTimeLabel(d) {
+  const now = /* @__PURE__ */ new Date();
+  const days = Math.round(
+    (new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() - new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()) / 864e5
+  );
+  const day = days === 0 ? "today" : days === 1 ? "tomorrow" : d.toLocaleDateString();
+  return `${day} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+function storedPower(fallback) {
+  try {
+    const v = parseFloat(localStorage.getItem(POWER_KEY) || "");
+    return v > 0 ? v : fallback;
+  } catch {
+    return fallback;
+  }
+}
+function storePower(watts) {
+  try {
+    localStorage.setItem(POWER_KEY, String(watts));
+  } catch {
+  }
+}
+function renderPlanner(ctx) {
+  const { sr, config, hass } = ctx;
+  const deviceId = config.integration?.device_id || config.integration?.entry_id;
+  const planEntity = ctx.planningEntityId || config.integration?.planning_entity;
+  const goal = (planEntity ? hass?.states[planEntity]?.attributes?.battery_goal : null) ?? null;
+  const kwpW = Math.round((parseFloat(hass?.states[ctx.kwpEntityId]?.state) || 3) * 1e3);
+  const slots = [...ctx.slots].sort((a, b) => slotStart(a) - slotStart(b));
+  const durMs = slots.length > 1 ? slotStart(slots[1]) - slotStart(slots[0]) : 36e5;
+  const slotHours = durMs / 36e5;
+  const now = /* @__PURE__ */ new Date();
+  const future = slots.filter((s) => slotStart(s) + durMs > now.getTime());
+  const horizonEnd = future.length ? slotStart(future[future.length - 1]) + durMs : now.getTime();
+  let amountMode = "kwh";
+  const goalHtml = goal ? `<div class="pl-note">Active goal: <b>${goal.target_pct.toFixed(0)} %</b> by <b>${dayTimeLabel(new Date(goal.by))}</b></div>` : '<div class="pl-note">No goal set.</div>';
+  sr.getElementById("popup").innerHTML = `
+    <div class="be-header">
+      <span class="be-title">\u26A1 Plan</span>
+      <button class="be-close" id="pl-close">\u2715</button>
+    </div>
+
+    <div class="be-range-section">
+      <div class="be-section-label">Charge the car on the cheapest slots</div>
+      <div class="pl-grid">
+        <div class="param-row">
+          <span class="param-label">From<span class="param-optional">opt</span></span>
+          <input class="param-input" id="pl-car-from" type="time" step="900" value="">
+        </div>
+        <div class="param-row">
+          <span class="param-label">Ready by</span>
+          <input class="param-input" id="pl-car-by" type="time" step="900" value="06:00">
+        </div>
+        <div class="param-row">
+          <span class="param-label">Amount</span>
+          <input class="param-input" id="pl-car-amount" type="number" min="0" step="0.5" value="10">
+          <button class="be-filter-btn sel" data-amount="kwh">kWh</button>
+          <button class="be-filter-btn" data-amount="slots">slots</button>
+        </div>
+        <div class="param-row">
+          <span class="param-label">Charger power</span>
+          <input class="param-input" id="pl-car-power" type="number" min="100" max="100000" step="100" value="${storedPower(kwpW)}">
+          <span class="param-unit">W</span>
+        </div>
+        <div class="param-row">
+          <span class="param-label">Max price<span class="param-optional">opt</span></span>
+          <input class="param-input" id="pl-car-max" type="number" step="0.1" value="">
+          <span class="param-unit">ct</span>
+        </div>
+        <button class="toggle-btn on" id="pl-car-solar" style="--tc:#f59e0b">
+          <div class="toggle-btn-dot"></div>\u2600 Use Solar
+        </button>
+      </div>
+      <div class="be-preview-info pl-preview" id="pl-car-info"></div>
+      <div class="be-preview-strip" id="pl-car-strip"></div>
+      <div class="pl-btn-row">
+        <button class="be-apply-btn" id="pl-car-apply">Schedule car</button>
+      </div>
+    </div>
+
+    <div class="be-range-section">
+      <div class="be-section-label">Have the battery charged by a time</div>
+      ${goalHtml}
+      <div class="pl-grid">
+        <div class="param-row">
+          <span class="param-label">Target</span>
+          <input class="param-input" id="pl-bat-pct" type="number" min="0" max="100" step="1" value="${goal ? goal.target_pct : 80}">
+          <span class="param-unit">%</span>
+        </div>
+        <div class="param-row">
+          <span class="param-label">By</span>
+          <input class="param-input" id="pl-bat-by" type="time" step="900" value="${goal ? slotTimeStr({ start: goal.by, price: 0 }) : "17:00"}">
+        </div>
+      </div>
+      <div class="be-preview-info pl-preview" id="pl-bat-info"></div>
+      <div class="pl-btn-row">
+        <button class="be-apply-btn" id="pl-bat-apply">Set goal &amp; optimize</button>
+        ${goal ? '<button class="be-lock-btn" id="pl-bat-clear">Clear goal</button>' : ""}
+      </div>
+    </div>
+  `;
+  const input = (id) => sr.getElementById(id);
+  const num = (id) => {
+    const v = parseFloat(input(id).value);
+    return isNaN(v) ? null : v;
+  };
+  function carPlan() {
+    const from = input("pl-car-from").value ? nextOccurrence(input("pl-car-from").value, now) : now;
+    const by = from ? nextOccurrence(input("pl-car-by").value, from) : null;
+    const amount = num("pl-car-amount");
+    const power = num("pl-car-power");
+    const maxPrice = num("pl-car-max");
+    if (!from || !by || !amount || amount <= 0 || !power || power <= 0) return null;
+    const wanted = amountMode === "slots" ? Math.max(1, Math.round(amount)) : Math.max(1, Math.ceil(amount * 1e3 / (power * slotHours) - 1e-9));
+    const candidates = future.filter((s) => slotStart(s) + durMs > from.getTime() && slotStart(s) < by.getTime() && !s.locked && (maxPrice == null || s.price <= maxPrice));
+    const picked = [...candidates].sort((a, b) => a.price - b.price).slice(0, wanted);
+    return { from, by, amount, power, maxPrice, wanted, picked };
+  }
+  function renderCar() {
+    const plan = carPlan();
+    const info = sr.getElementById("pl-car-info");
+    const strip = sr.getElementById("pl-car-strip");
+    const apply = sr.getElementById("pl-car-apply");
+    if (!plan) {
+      info.textContent = "Fill in a time and an amount.";
+      strip.innerHTML = "";
+      apply.disabled = true;
+      return;
+    }
+    const { by, wanted, picked, power } = plan;
+    const pickedSet = new Set(picked);
+    const shown = future.filter((s) => slotStart(s) < by.getTime());
+    strip.innerHTML = shown.map(
+      (s) => `<div class="be-preview-seg ${pickedSet.has(s) ? "matched" : "unmatched"}" style="background:${priceColor(s.price)}"></div>`
+    ).join("");
+    if (picked.length === 0) {
+      info.innerHTML = by.getTime() > horizonEnd ? "No prices published yet for that window." : "No free slot in that window.";
+      apply.disabled = true;
+      return;
+    }
+    const avg = picked.reduce((a, s) => a + s.price, 0) / picked.length;
+    const kwh = picked.length * power * slotHours / 1e3;
+    const times = picked.map(slotStart).sort((a, b) => a - b);
+    let text = `<b>${picked.length}</b> slot${picked.length !== 1 ? "s" : ""} (${kwh.toFixed(1)} kWh) between <b>${dayTimeLabel(new Date(times[0]))}</b> and <b>${dayTimeLabel(new Date(times[times.length - 1] + durMs))}</b>, avg <b>${avg.toFixed(2)} ct</b>`;
+    if (picked.length < wanted) {
+      text += ` \u2014 only ${picked.length} of ${wanted} slots available`;
+      if (by.getTime() > horizonEnd) text += " (prices not published to the end of the window)";
+    }
+    info.innerHTML = text;
+    apply.disabled = false;
+  }
+  ["pl-car-from", "pl-car-by", "pl-car-amount", "pl-car-power", "pl-car-max"].forEach((id) => input(id).addEventListener("input", renderCar));
+  sr.querySelectorAll("[data-amount]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      amountMode = btn.dataset.amount;
+      sr.querySelectorAll("[data-amount]").forEach((b) => b.classList.toggle("sel", b === btn));
+      input("pl-car-amount").step = amountMode === "slots" ? "1" : "0.5";
+      renderCar();
+    });
+  });
+  const solarBtn = sr.getElementById("pl-car-solar");
+  solarBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    solarBtn.classList.toggle("on");
+  });
+  const done = (btn, label) => {
+    btn.textContent = label;
+    btn.classList.add("success");
+    setTimeout(() => {
+      ctx.onApplied();
+      ctx.onClose();
+    }, 800);
+  };
+  const failed = (btn, err) => {
+    btn.textContent = `\u2715 ${err?.message || "Error"}`;
+    btn.classList.add("error");
+    btn.disabled = false;
+    console.error("Planner error:", err);
+  };
+  sr.getElementById("pl-car-apply").addEventListener("click", async (e) => {
+    e.stopPropagation();
+    const btn = e.currentTarget;
+    const plan = carPlan();
+    if (!plan) return;
+    btn.disabled = true;
+    btn.classList.remove("error");
+    btn.textContent = "Scheduling\u2026";
+    storePower(plan.power);
+    const data = {
+      device_id: deviceId,
+      stop_time: plan.by.toISOString(),
+      use_solar: solarBtn.classList.contains("on"),
+      use_net_wattage: plan.power
+    };
+    if (input("pl-car-from").value) data.start_time = plan.from.toISOString();
+    if (plan.maxPrice != null) data.max_price = plan.maxPrice;
+    if (amountMode === "slots") data.slots_wanted = plan.wanted;
+    else data.energy_kwh = plan.amount;
+    try {
+      await hass.callService("ha_ems", "planning_charge_car", data);
+      done(btn, "\u2713 Scheduled");
+    } catch (err) {
+      failed(btn, err);
+    }
+  });
+  function batteryPlan() {
+    const pct = num("pl-bat-pct");
+    const by = nextOccurrence(input("pl-bat-by").value, now);
+    if (pct == null || pct < 0 || pct > 100 || !by) return null;
+    return { pct, by };
+  }
+  function renderBattery() {
+    const plan = batteryPlan();
+    const info = sr.getElementById("pl-bat-info");
+    const apply = sr.getElementById("pl-bat-apply");
+    apply.disabled = !plan;
+    if (!plan) {
+      info.textContent = "Fill in a target and a time.";
+      return;
+    }
+    info.innerHTML = `At least <b>${plan.pct.toFixed(0)} %</b> by <b>${dayTimeLabel(plan.by)}</b>, charged at the cheapest moments before then.` + (plan.by.getTime() > horizonEnd ? " Prices for that time are not published yet; the goal takes effect at the first Optimize after they are." : "");
+  }
+  ["pl-bat-pct", "pl-bat-by"].forEach((id) => input(id).addEventListener("input", renderBattery));
+  sr.getElementById("pl-bat-apply").addEventListener("click", async (e) => {
+    e.stopPropagation();
+    const btn = e.currentTarget;
+    const plan = batteryPlan();
+    if (!plan) return;
+    btn.disabled = true;
+    btn.classList.remove("error");
+    btn.textContent = "Optimizing\u2026";
+    try {
+      await hass.callService("ha_ems", "planning_battery_goal", {
+        device_id: deviceId,
+        target_pct: plan.pct,
+        by: plan.by.toISOString()
+      });
+      done(btn, "\u2713 Goal set");
+    } catch (err) {
+      failed(btn, err);
+    }
+  });
+  sr.getElementById("pl-bat-clear")?.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try {
+      await hass.callService("ha_ems", "planning_battery_goal", { device_id: deviceId });
+      btn.textContent = "\u2713 Cleared";
+      setTimeout(() => {
+        ctx.onApplied();
+        ctx.onClose();
+      }, 800);
+    } catch (err) {
+      failed(btn, err);
+    }
+  });
+  sr.getElementById("pl-close").addEventListener("click", () => ctx.onClose());
+  sr.querySelectorAll("#popup .param-input").forEach((el) => el.addEventListener("click", (e) => e.stopPropagation()));
+  renderCar();
+  renderBattery();
+}
+
 // src/dashboard/dashboard.ts
 var EmsDashboardCard = class extends HTMLElement {
   constructor() {
@@ -1863,7 +2166,9 @@ var EmsDashboardCard = class extends HTMLElement {
     this._lastStates = states;
     const slots = this._buildSlots(hass);
     const battState = battEntity ? hass?.states[battEntity]?.state : "";
-    const ser = JSON.stringify(slots) + "|" + battState;
+    const planState = hass?.states[this._planningEntityId || this._config?.integration?.planning_entity || ""];
+    const goal = JSON.stringify(planState?.attributes?.battery_goal ?? null);
+    const ser = JSON.stringify(slots) + "|" + battState + "|" + goal;
     if (ser !== this._lastSer) {
       this._lastSer = ser;
       this._slots = slots;
@@ -2040,7 +2345,10 @@ var EmsDashboardCard = class extends HTMLElement {
           <span id="header-date"></span>
         </header>
         <div class="stats" id="stats"></div>
-        <div class="controls" id="day-btns"></div>
+        <div class="controls">
+          <div class="day-btns" id="day-btns"></div>
+          <button class="btn plan-btn" id="plan-btn" title="Schedule the car or set a battery goal" hidden>\u26A1 Plan</button>
+        </div>
         <div class="chart-card" id="chart-card">
           <div class="y-axis" id="y-axis" style="height:${CHART_H + 24}px"></div>
           <div class="chart-right">
@@ -2077,6 +2385,7 @@ var EmsDashboardCard = class extends HTMLElement {
     this.shadowRoot.getElementById("overlay").addEventListener("click", (e) => {
       if (e.target.id === "overlay") this._closePopup();
     });
+    this.shadowRoot.getElementById("plan-btn").addEventListener("click", () => this._openPlanner());
   }
   _render() {
     const sr = this.shadowRoot;
@@ -2199,6 +2508,8 @@ var EmsDashboardCard = class extends HTMLElement {
       debugEl.hidden = true;
       debugEl.innerHTML = "";
     }
+    const canPlan = !!(this._config.integration?.device_id || this._config.integration?.entry_id);
+    sr.getElementById("plan-btn").hidden = !canPlan || this._slots.length === 0;
     if (!n) {
       sr.getElementById("bars").innerHTML = '<div class="empty">No schedule data available</div>';
       sr.getElementById("stats").innerHTML = "";
@@ -2440,10 +2751,29 @@ var EmsDashboardCard = class extends HTMLElement {
       }
     });
   }
+  _openPlanner() {
+    this._activeIdx = null;
+    this.shadowRoot.getElementById("tooltip").classList.remove("visible");
+    renderPlanner({
+      sr: this.shadowRoot,
+      slots: this._slots,
+      config: this._config,
+      hass: this._hass,
+      kwpEntityId: this._kwpEntityId,
+      planningEntityId: this._planningEntityId,
+      onClose: () => this._closePopup(),
+      onApplied: () => {
+        this._lastSer = "";
+        this.hass = this._hass;
+      }
+    });
+    this.shadowRoot.getElementById("overlay").classList.add("open");
+  }
   _onKey(e) {
     const overlay = this.shadowRoot?.getElementById("overlay");
     if (!overlay?.classList.contains("open")) return;
     if (e.key === "Escape") this._closePopup();
+    if (this._activeIdx == null) return;
     if (e.key === "ArrowLeft") this._navigateSlot(this._activeIdx - 1);
     if (e.key === "ArrowRight") this._navigateSlot(this._activeIdx + 1);
   }

@@ -5,6 +5,7 @@ import { esc, localDateStr, slotAction, slotTimeStr, priceColor, priceScore, pri
 import { ChartLayers, renderMainChart, renderBatteryOverlay, renderBrush, resolveBatteryEntity, rgbToCss, scrollToSlot } from './dashboard-graph';
 import { DialogContext, renderPopup } from './dashboard-dialog';
 import { renderBulkEdit } from './dashboard-bulk-edit';
+import { renderPlanner } from './dashboard-planner';
 
 export class EmsDashboardCard extends HTMLElement {
   private _slots: Slot[];
@@ -85,7 +86,9 @@ export class EmsDashboardCard extends HTMLElement {
     // The battery SoC entity is not part of `slots`, so fold its state into the
     // change key — otherwise the overlay never redraws as the battery moves.
     const battState  = battEntity ? hass?.states[battEntity]?.state : '';
-    const ser = JSON.stringify(slots) + '|' + battState;
+    const planState  = hass?.states[this._planningEntityId || this._config?.integration?.planning_entity || ''];
+    const goal       = JSON.stringify(planState?.attributes?.battery_goal ?? null);
+    const ser = JSON.stringify(slots) + '|' + battState + '|' + goal;
     if (ser !== this._lastSer) {
       this._lastSer = ser;
       this._slots   = slots;
@@ -283,7 +286,10 @@ export class EmsDashboardCard extends HTMLElement {
           <span id="header-date"></span>
         </header>
         <div class="stats" id="stats"></div>
-        <div class="controls" id="day-btns"></div>
+        <div class="controls">
+          <div class="day-btns" id="day-btns"></div>
+          <button class="btn plan-btn" id="plan-btn" title="Schedule the car or set a battery goal" hidden>⚡ Plan</button>
+        </div>
         <div class="chart-card" id="chart-card">
           <div class="y-axis" id="y-axis" style="height:${CHART_H + 24}px"></div>
           <div class="chart-right">
@@ -321,6 +327,7 @@ export class EmsDashboardCard extends HTMLElement {
     this.shadowRoot!.getElementById('overlay')!.addEventListener('click', (e: Event) => {
       if ((e.target as HTMLElement).id === 'overlay') this._closePopup();
     });
+    this.shadowRoot!.getElementById('plan-btn')!.addEventListener('click', () => this._openPlanner());
   }
 
   _render() {
@@ -448,6 +455,10 @@ export class EmsDashboardCard extends HTMLElement {
       debugEl.hidden = true;
       debugEl.innerHTML = '';
     }
+
+    // The planner calls the integration's services, so it needs the device.
+    const canPlan = !!(this._config.integration?.device_id || this._config.integration?.entry_id);
+    (sr.getElementById('plan-btn') as HTMLElement).hidden = !canPlan || this._slots.length === 0;
 
     // ── Chart ────────────────────────────────────────────────────────────────
     if (!n) {
@@ -713,10 +724,31 @@ export class EmsDashboardCard extends HTMLElement {
     });
   }
 
+  _openPlanner() {
+    this._activeIdx = null;
+    this.shadowRoot!.getElementById('tooltip')!.classList.remove('visible');
+    renderPlanner({
+      sr: this.shadowRoot!,
+      slots: this._slots,
+      config: this._config,
+      hass: this._hass,
+      kwpEntityId: this._kwpEntityId,
+      planningEntityId: this._planningEntityId,
+      onClose: () => this._closePopup(),
+      onApplied: () => {
+        this._lastSer = '';
+        this.hass = this._hass;
+      },
+    });
+    this.shadowRoot!.getElementById('overlay')!.classList.add('open');
+  }
+
   _onKey(e: KeyboardEvent) {
     const overlay = this.shadowRoot?.getElementById('overlay');
     if (!overlay?.classList.contains('open')) return;
     if (e.key === 'Escape')     this._closePopup();
+    // Arrow keys step through slots; in the planner they belong to its fields.
+    if (this._activeIdx == null) return;
     if (e.key === 'ArrowLeft')  this._navigateSlot(this._activeIdx! - 1);
     if (e.key === 'ArrowRight') this._navigateSlot(this._activeIdx! + 1);
   }

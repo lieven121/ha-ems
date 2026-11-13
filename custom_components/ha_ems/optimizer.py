@@ -30,6 +30,10 @@ found by dynamic programming over the battery's state of charge:
 Locked and car-charge slots keep their action; the optimiser plans around
 them.
 
+A battery goal ("at least 80 % by 17:00") is one more thing a plan may not
+miss: ending the goal's slot below the target is penalised like dropping
+below min_battery, and the DP finds the cheapest way to get there.
+
 The DP evaluates hundreds of thousands of transitions, so :class:`_Model`
 computes them with plain arithmetic instead of calling
 :func:`.simulation.simulate_slot` each time. It implements the same rules,
@@ -237,13 +241,15 @@ def optimize(
     charge_wattage: float,
     roundtrip_loss_pct: float,
     discharge_wattage: float | None = None,
+    soc_goal: tuple[str, float] | None = None,
 ) -> dict[str, tuple[str, dict[str, Any]]]:
     """Plan every non-fixed slot; return {key: (action, action_config)}.
 
     *charge_wattage* is both the grid power a charge slot draws and the cap on
     power into the battery (solar included). *discharge_wattage* is the most
     the battery may deliver in a discharge slot; it defaults to the charge
-    power.
+    power. *soc_goal* is ``(slot key, SoC %)``: the battery must hold at least
+    that much at the end of that slot (max_battery at most).
     """
     if not slots:
         return {}
@@ -273,9 +279,14 @@ def optimize(
     max_price = max(abs(s.price) + abs(s.injection_price or 0.0) for s in slots)
     penalty_per_pct = (max_price + 1.0) * battery_kwh * 100
 
-    def total(option: Option, start_soc: float, nxt: list[float]) -> float:
+    goal_key, goal_soc = soc_goal if soc_goal else (None, 0.0)
+    goal_soc = min(goal_soc, settings.max_battery)
+
+    def total(option: Option, start_soc: float, nxt: list[float], goal: float = 0.0) -> float:
         _, _, end_soc, cost, wear = option
         cost += wear
+        if end_soc < goal - 1e-6:
+            cost += penalty_per_pct * (goal - end_soc)
         if end_soc < min_soc - 1e-6 and end_soc < start_soc + 1e-6:
             # Only penalise ending below the floor when the slot made it worse
             # (or kept it there): a slot that climbs back up is the fix.
@@ -299,8 +310,9 @@ def optimize(
     ]
     for slot in reversed(slots):
         nxt = values[-1]
+        goal = goal_soc if slot.key == goal_key else 0.0
         values.append(
-            [min(total(opt, soc, nxt) for opt in model.options(slot, soc)) for soc in grid]
+            [min(total(opt, soc, nxt, goal) for opt in model.options(slot, soc)) for soc in grid]
         )
     values.reverse()  # values[t] belongs to slots[t]; values[-1] is terminal
 
@@ -309,8 +321,9 @@ def optimize(
     soc = current_soc
     for t, slot in enumerate(slots):
         best: tuple[float, int, Option] | None = None
+        goal = goal_soc if slot.key == goal_key else 0.0
         for opt in model.options(slot, soc):
-            score = total(opt, soc, values[t + 1])
+            score = total(opt, soc, values[t + 1], goal)
             rank = _ACTION_RANK.get(opt[0], 9)
             if (
                 best is None

@@ -258,6 +258,15 @@ header[hidden]{display:none;}
 #chart-card[hidden]{display:none;}
 #stats[hidden]{display:none;}
 #day-btns[hidden]{display:none;}
+.day-btns{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.plan-btn{margin-left:auto;}
+.plan-btn[hidden]{display:none;}
+.pl-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;align-items:center;}
+@media (max-width:480px){.pl-grid{grid-template-columns:1fr;}}
+.pl-note{font-family:var(--code-font-family,monospace);font-size:10px;color:var(--text-dim);margin-bottom:8px;}
+.pl-note b{color:var(--text-bright);}
+.pl-preview{margin-top:10px;}
+.pl-btn-row{display:flex;gap:8px;margin-top:10px;}
 .legend-wrap[hidden]{display:none;}
 
 /* ── Bulk Edit Modal ─────────────────────────────────────────────────────── */
