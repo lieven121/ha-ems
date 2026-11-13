@@ -21,11 +21,13 @@ from .const import (
     ACTIONS,
     DOMAIN,
     FIELD_ACTION,
+    FIELD_BY,
     FIELD_CLEAR_LOCKED,
     FIELD_DEVICE_ID,
     FIELD_DEVICE_NAME,
     FIELD_DEVICES,
     FIELD_END,
+    FIELD_ENERGY_KWH,
     FIELD_LOCK,
     FIELD_LOCKED,
     FIELD_MAX_PRICE,
@@ -36,6 +38,7 @@ from .const import (
     FIELD_START,
     FIELD_START_TIME,
     FIELD_STOP_TIME,
+    FIELD_TARGET_PCT,
     FIELD_TIME,
     FIELD_UNTIL_PCT,
     FIELD_USE_BATTERY_UNTIL_PCT,
@@ -43,6 +46,7 @@ from .const import (
     FIELD_USE_NET_WATTAGE,
     FIELD_USE_SOLAR,
     FIELD_WATTAGE,
+    SERVICE_PLANNING_BATTERY_GOAL,
     SERVICE_PLANNING_BULK,
     SERVICE_PLANNING_CAR_CHARGE_SLOT,
     SERVICE_PLANNING_CHARGE,
@@ -101,10 +105,14 @@ _SERVICE_SCHEMAS: dict[str, vol.Schema] = {
     SERVICE_PLANNING_CHARGE_CAR: vol.Schema(
         {
             vol.Required(FIELD_DEVICE_ID): cv.string,
-            vol.Required(FIELD_START_TIME): cv.string,
+            # Without a start the window opens now.
+            vol.Optional(FIELD_START_TIME): cv.string,
             vol.Required(FIELD_STOP_TIME): cv.string,
-            vol.Required(FIELD_MAX_PRICE): vol.Coerce(float),
-            vol.Required(FIELD_SLOTS_WANTED): vol.All(vol.Coerce(int), vol.Range(min=1)),
+            vol.Optional(FIELD_MAX_PRICE): vol.Coerce(float),
+            # One of the two: a number of slots, or an amount of energy that
+            # use_net_wattage (the charging power) turns into slots.
+            vol.Optional(FIELD_SLOTS_WANTED): vol.All(vol.Coerce(int), vol.Range(min=1)),
+            vol.Optional(FIELD_ENERGY_KWH): vol.All(vol.Coerce(float), vol.Range(min=0.01)),
             vol.Optional(FIELD_USE_SOLAR, default=True): cv.boolean,
             vol.Optional(FIELD_USE_NET_WATTAGE): vol.Coerce(float),
             vol.Optional(FIELD_USE_BATTERY_WATTAGE): vol.Coerce(float),
@@ -128,6 +136,14 @@ _SERVICE_SCHEMAS: dict[str, vol.Schema] = {
     SERVICE_PLANNING_OPTIMIZE: vol.Schema(
         {
             vol.Required(FIELD_DEVICE_ID): cv.string,
+        }
+    ),
+    SERVICE_PLANNING_BATTERY_GOAL: vol.Schema(
+        {
+            vol.Required(FIELD_DEVICE_ID): cv.string,
+            # Leaving out the target clears the goal.
+            vol.Optional(FIELD_TARGET_PCT): vol.All(vol.Coerce(float), vol.Range(min=0, max=100)),
+            vol.Optional(FIELD_BY): cv.string,
         }
     ),
     SERVICE_PLANNING_DEVICE_SLOT: vol.Schema(
@@ -272,10 +288,11 @@ def async_register_services(hass: HomeAssistant) -> None:
     async def handle_planning_charge_car(call: ServiceCall) -> None:
         coord = _get_coordinator_by_device(hass, call.data[FIELD_DEVICE_ID])
         await coord.async_charge_car(
-            start_time=call.data[FIELD_START_TIME],
+            start_time=call.data.get(FIELD_START_TIME),
             stop_time=call.data[FIELD_STOP_TIME],
-            max_price=call.data[FIELD_MAX_PRICE],
-            slots_wanted=call.data[FIELD_SLOTS_WANTED],
+            max_price=call.data.get(FIELD_MAX_PRICE),
+            slots_wanted=call.data.get(FIELD_SLOTS_WANTED),
+            energy_kwh=call.data.get(FIELD_ENERGY_KWH),
             use_solar=call.data.get(FIELD_USE_SOLAR, True),
             use_net_wattage=call.data.get(FIELD_USE_NET_WATTAGE),
             use_battery_wattage=call.data.get(FIELD_USE_BATTERY_WATTAGE),
@@ -299,6 +316,13 @@ def async_register_services(hass: HomeAssistant) -> None:
     async def handle_planning_optimize(call: ServiceCall) -> None:
         coord = _get_coordinator_by_device(hass, call.data[FIELD_DEVICE_ID])
         await coord.async_optimize()
+
+    async def handle_planning_battery_goal(call: ServiceCall) -> None:
+        coord = _get_coordinator_by_device(hass, call.data[FIELD_DEVICE_ID])
+        await coord.async_set_battery_goal(
+            target_pct=call.data.get(FIELD_TARGET_PCT),
+            by=call.data.get(FIELD_BY),
+        )
 
     async def handle_planning_device_slot(call: ServiceCall) -> None:
         coord = _get_coordinator_by_device(hass, call.data[FIELD_DEVICE_ID])
@@ -327,6 +351,7 @@ def async_register_services(hass: HomeAssistant) -> None:
         SERVICE_PLANNING_LOCK: handle_planning_lock,
         SERVICE_PLANNING_CLEAR: handle_planning_clear,
         SERVICE_PLANNING_OPTIMIZE: handle_planning_optimize,
+        SERVICE_PLANNING_BATTERY_GOAL: handle_planning_battery_goal,
         SERVICE_PLANNING_DEVICE_SLOT: handle_planning_device_slot,
         SERVICE_PLANNING_DEVICE_CLEAR: handle_planning_device_clear,
     }

@@ -70,7 +70,8 @@ All services target a **device** (`device_id`), supporting multiple EMS instance
 | `ha_ems.planning_discharge` | Set a slot to discharge (`wattage`, `until_pct`) |
 | `ha_ems.planning_use_net` | Draw from grid (`max_wattage`, `use_solar`) |
 | `ha_ems.planning_car_charge_slot` | Single slot car charge (`use_solar`, `use_net_wattage`, `use_battery_wattage`, `use_battery_until_pct`) |
-| `ha_ems.planning_charge_car` | Reserve cheapest slots in a window for car charging |
+| `ha_ems.planning_charge_car` | Reserve the cheapest slots in a window for car charging: `stop_time`, and either `slots_wanted` or `energy_kwh` (with `use_net_wattage` as the charging power). `start_time` defaults to now, `max_price` to no limit |
+| `ha_ems.planning_battery_goal` | Have the battery at `target_pct` by the time `by`. Re-plans right away, and every later optimizer run keeps to it until the time has passed. Without `target_pct` the goal is cleared |
 | `ha_ems.planning_lock` | Lock / unlock a range of slots against the optimizer |
 | `ha_ems.planning_clear` | Reset all manual overrides (optionally including locked slots) |
 | `ha_ems.planning_optimize` | Re-run the optimizer for all unlocked slots |
@@ -98,6 +99,7 @@ device_id: <your_ems_device_id>
 | Solar & load | Solar forecast (yellow) and predicted house load (purple) behind the bars; `layout.show_forecast: false` hides them |
 | Layer toggles | Solar, house load and battery icon buttons next to Today / Tomorrow show or hide each overlay |
 | Devices legend | `layout.show_device_legend: false` hides the scheduled devices legend |
+| Plan | The ⚡ Plan button schedules the car on the cheapest slots before a time (by kWh or number of slots, with a preview of the slots it will take) and sets or clears the battery goal. The goal shows as a bar on the battery line |
 | Locking | Edits made in the slot editor or bulk edit are locked by default (untick to leave them to the optimizer); bulk edit also has Lock / Unlock buttons |
 
 ---
@@ -127,6 +129,7 @@ The optimizer runs when you press **Optimize** or call `ha_ems.planning_optimize
    - Discharge slots may use up to **Max discharge power**. Similar-priced slots share a discharge; a slot that stands out gets full power.
    - **Allow Discharge** enables discharge slots; **Allow Idle (Optimizer)** off means non-charge slots use the grid.
 5. **Locked and car-charge slots** are kept as they are and planned around.
+6. **Battery goal:** with a goal set, the plan must have the battery at the target by the deadline, and gets there as cheaply as it can. A deadline beyond the published prices is ignored until they are in.
 
 The battery forecast on the card (`battery_prediction`) uses the same model and updates on every refresh. The slot that is already running only counts for the time left in it. The plan, and the learned profile, are persisted to HA storage and restored on restart.
 

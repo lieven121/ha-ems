@@ -74,6 +74,7 @@ class EMSPlanningSensor(CoordinatorEntity[EMSCoordinator], SensorEntity):
             # the entity id having to be configured a second time on the card.
             "battery_entity_id": cfg.get(CONF_BATTERY_ENTITY_ID),
             "battery_size_kwh": cfg.get(CONF_BATTERY_SIZE_KWH),
+            "battery_goal": self.coordinator.battery_goal,
             "devices_available": [
                 {
                     "name": d["name"],

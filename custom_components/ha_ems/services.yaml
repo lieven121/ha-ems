@@ -206,7 +206,7 @@ planning_car_charge_slot:
 
 planning_charge_car:
   name: "Planning - Charge Car"
-  description: "Reserve the cheapest slots within a time window for car charging."
+  description: "Reserve the cheapest slots within a time window for car charging. Give either a number of slots or an amount of energy."
   fields:
     device_id:
       name: "EMS Device"
@@ -217,8 +217,7 @@ planning_charge_car:
           integration: ha_ems
     start_time:
       name: "Window Start"
-      description: "Start of the allowed charging window (ISO timestamp)."
-      required: true
+      description: "Start of the allowed charging window (ISO timestamp). Now, if left out."
       selector:
         text:
     stop_time:
@@ -229,8 +228,7 @@ planning_charge_car:
         text:
     max_price:
       name: "Max Price"
-      description: "Maximum acceptable price per kWh. Slots above this price are excluded."
-      required: true
+      description: "Maximum acceptable price per kWh. Slots above this price are excluded. No limit if left out."
       selector:
         number:
           min: 0
@@ -239,12 +237,21 @@ planning_charge_car:
           mode: box
     slots_wanted:
       name: "Slots Wanted"
-      description: "Number of cheapest slots to reserve for car charging."
-      required: true
+      description: "Number of cheapest slots to reserve for car charging. Use this or Energy."
       selector:
         number:
           min: 1
           max: 96
+          mode: box
+    energy_kwh:
+      name: "Energy (kWh)"
+      description: "Energy the car needs. Turned into slots using Net Wattage as the charging power. Use this or Slots Wanted."
+      selector:
+        number:
+          min: 0.1
+          max: 200
+          step: 0.1
+          unit_of_measurement: "kWh"
           mode: box
     use_solar:
       name: "Use Solar"
@@ -279,6 +286,32 @@ planning_charge_car:
           max: 100
           unit_of_measurement: "%"
           mode: box
+
+planning_battery_goal:
+  name: "Planning - Battery Goal"
+  description: "Have the battery at a charge level by a given time. The optimizer re-plans right away and keeps to the goal on every later run, until the time has passed. Leave out the target to clear the goal."
+  fields:
+    device_id:
+      name: "EMS Device"
+      description: "The EMS device to target."
+      required: true
+      selector:
+        device:
+          integration: ha_ems
+    target_pct:
+      name: "Target (%)"
+      description: "Charge level the battery must have. Leave out to clear the goal."
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+          mode: box
+    by:
+      name: "By"
+      description: "When the battery must have reached the target (ISO timestamp)."
+      selector:
+        text:
 
 planning_lock:
   name: "Planning - Lock"

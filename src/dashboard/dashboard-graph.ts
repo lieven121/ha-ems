@@ -1,4 +1,4 @@
-import { Slot, CardConfig } from '../shared/types';
+import { Slot, CardConfig, BatteryGoal } from '../shared/types';
 import { BATT_AXIS_TICKS, CHART_H, Y_STEPS } from '../shared/constants';
 import { esc, priceColor, priceScore, priceScoreColor, slotAction, slotHasCar, slotTimeStr, slotEndTimeStr } from '../shared/utils';
 
@@ -201,6 +201,7 @@ export function renderBatteryOverlay(
         const y = (1 - currentPct! / 100) * CHART_H;
         svgContent += `<line x1="0" y1="${y}" x2="100" y2="${y}" stroke="${lineColor}" stroke-width="1.5" stroke-dasharray="2 3" opacity="0.7" vector-effect="non-scaling-stroke"/>`;
       }
+      if (enabled) svgContent += renderGoal(slots, config, hass, planningEntityId, lineColor);
       battSvg.innerHTML = svgContent;
       // Must be the attribute, not the `hidden` property: `hidden` is defined on
       // HTMLElement, not SVGElement, so assigning it here only sets a JS expando
@@ -230,6 +231,34 @@ export function renderBatteryOverlay(
       battAxis.setAttribute('hidden', '');
     }
   }
+}
+
+/** The battery goal, if its deadline falls on the day shown: a bar at the
+ *  target level over the last slot before the deadline, on a stem. */
+function renderGoal(
+  slots: Slot[],
+  config: CardConfig,
+  hass: any,
+  planningEntityId: string | null,
+  color: string,
+): string {
+  const planEntity = planningEntityId || config.integration?.planning_entity;
+  const goal: BatteryGoal | null =
+    (planEntity ? hass?.states[planEntity]?.attributes?.battery_goal : null) ?? null;
+  const n = slots.length;
+  if (!goal || n < 2) return '';
+  const by = new Date(goal.by).getTime();
+  const start = (s: Slot) => new Date(s.start ?? s.time!).getTime();
+  const dur = start(slots[1]) - start(slots[0]);
+  let idx = -1;
+  for (let i = 0; i < n; i++) if (start(slots[i]) + dur <= by) idx = i;
+  // Nothing to show when the deadline lies before or after this day.
+  if (idx < 0 || by > start(slots[n - 1]) + dur) return '';
+  const y  = (1 - Math.max(0, Math.min(100, goal.target_pct)) / 100) * CHART_H;
+  const x0 = idx / n * 100;
+  const x1 = (idx + 1) / n * 100;
+  return `<line x1="${x1}" y1="${y}" x2="${x1}" y2="${CHART_H}" stroke="${color}" stroke-width="1" opacity="0.6" vector-effect="non-scaling-stroke"/>` +
+    `<line x1="${x0}" y1="${y}" x2="${x1}" y2="${y}" stroke="${color}" stroke-width="4" vector-effect="non-scaling-stroke"/>`;
 }
 
 /** Solar forecast (filled) and predicted house load (thin line), both

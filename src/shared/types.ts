@@ -30,6 +30,12 @@ export interface Slot {
   devices?: Array<{ name: string; control?: DeviceControl; mode?: string | null; manual_override_w?: number | null; allocated_wattage_w?: number | null }>;
 }
 
+/** "Battery at least target_pct by then", as the optimizer is holding to. */
+export interface BatteryGoal {
+  target_pct: number;
+  by: string;
+}
+
 export interface CardConfig {
   entity?: string;
   debug?: boolean;

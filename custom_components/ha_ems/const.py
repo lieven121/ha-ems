@@ -103,6 +103,7 @@ SERVICE_PLANNING_OPTIMIZE = "planning_optimize"
 SERVICE_PLANNING_DEVICE_SLOT = "planning_device_slot"
 SERVICE_PLANNING_DEVICE_CLEAR = "planning_device_clear"
 SERVICE_PLANNING_BULK = "planning_bulk"
+SERVICE_PLANNING_BATTERY_GOAL = "planning_battery_goal"
 
 # ---------------------------------------------------------------------------
 # Service field names
@@ -119,6 +120,9 @@ FIELD_START_TIME = "start_time"
 FIELD_STOP_TIME = "stop_time"
 FIELD_MAX_PRICE = "max_price"
 FIELD_SLOTS_WANTED = "slots_wanted"
+FIELD_ENERGY_KWH = "energy_kwh"
+FIELD_TARGET_PCT = "target_pct"
+FIELD_BY = "by"
 FIELD_START = "start"
 FIELD_END = "end"
 FIELD_LOCK = "lock"

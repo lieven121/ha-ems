@@ -42,7 +42,15 @@ def slots(prices, solar=None, load=LOAD_W, inj=None, **fixed):
 
 
 def run(
-    opt_slots, *, soc=50.0, battery_kwh=KWH, charge_w=3000.0, discharge_w=None, loss=0.0, **settings
+    opt_slots,
+    *,
+    soc=50.0,
+    battery_kwh=KWH,
+    charge_w=3000.0,
+    discharge_w=None,
+    loss=0.0,
+    goal=None,
+    **settings,
 ):
     return optimize(
         opt_slots,
@@ -53,6 +61,7 @@ def run(
         charge_wattage=charge_w,
         discharge_wattage=discharge_w,
         roundtrip_loss_pct=loss,
+        soc_goal=goal,
     )
 
 
@@ -314,3 +323,29 @@ def test_running_slot_only_counts_for_what_is_left_of_it():
     action, cfg = run(opt, soc=20)["s0"]
     assert action == ACTION_CHARGE
     assert cfg["until_pct"] == pytest.approx(22)
+
+
+def test_battery_goal_is_reached_in_the_cheapest_slots_before_it():
+    # Nothing here is worth charging for, except that the battery has to be
+    # at 80 % by the end of s4. s1 and s3 are the cheap slots before that.
+    opt = slots([30, 10, 30, 12, 30, 5, 30, 30], load=0)
+    plan = run(opt, soc=20, goal=("s4", 80))
+    assert [a == ACTION_CHARGE for a in actions(plan)[:5]] == [False, True, False, True, False]
+    _, socs = replay(opt, plan, soc=20)
+    assert socs[4] == pytest.approx(80)
+    # The cheap slot after the deadline is of no use to the goal.
+    assert plan["s5"][0] != ACTION_CHARGE
+
+
+def test_battery_goal_out_of_reach_gets_as_close_as_it_can():
+    opt = slots([30, 30, 30, 30], load=0)
+    plan = run(opt, soc=20, goal=("s1", 95))
+    _, socs = replay(opt, plan, soc=20)
+    assert socs[1] == pytest.approx(80)  # two slots of 3 kW into 10 kWh
+
+
+def test_battery_goal_stops_at_max_battery():
+    opt = slots([30, 30, 30, 30, 30, 30], load=0)
+    plan = run(opt, soc=50, goal=("s3", 100), max_battery=90)
+    _, socs = replay(opt, plan, soc=50)
+    assert socs[3] == pytest.approx(90)
