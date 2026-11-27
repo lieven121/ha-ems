@@ -5,7 +5,7 @@ import { esc, localDateStr, slotAction, slotTimeStr, priceColor, priceScore, pri
 import { ChartLayers, renderMainChart, renderBatteryOverlay, renderBrush, resolveBatteryEntity, rgbToCss, scrollToSlot } from './dashboard-graph';
 import { DialogContext, renderPopup } from './dashboard-dialog';
 import { renderBulkEdit } from './dashboard-bulk-edit';
-import { renderPlanner } from './dashboard-planner';
+import { SurplusEntities, renderPlanner } from './dashboard-planner';
 
 export class EmsDashboardCard extends HTMLElement {
   private _slots: Slot[];
@@ -21,6 +21,8 @@ export class EmsDashboardCard extends HTMLElement {
   private _initialScroll: boolean;
   private _planningEntityId: string | null;
   private _kwpEntityId: string | null;
+  // The car-on-surplus switch and its two thresholds, for the planner.
+  private _surplusEntities: SurplusEntities = {};
   private _entityRegistry: any;
   // State objects the card renders from, as of the last render. HA replaces a
   // state object whenever it changes, so identity tells us if anything moved.
@@ -129,6 +131,11 @@ export class EmsDashboardCard extends HTMLElement {
 
       const kwpEntry = find('ems_kwp');
       if (kwpEntry) this._kwpEntityId = kwpEntry.entity_id;
+      this._surplusEntities = {
+        toggle: find('ems_car_on_surplus')?.entity_id,
+        soc: find('ems_car_surplus_soc')?.entity_id,
+        watts: find('ems_car_surplus_w')?.entity_id,
+      };
       // The entities just resolved; let the next hass update render with them.
       if (entry || kwpEntry) this._lastSer = '';
     } catch (err) {
@@ -193,6 +200,8 @@ export class EmsDashboardCard extends HTMLElement {
             battery_prediction: p.battery_prediction ?? slot.battery_prediction,
             solar_w:            p.solar_w       ?? slot.solar_w,
             load_w:             p.load_w        ?? slot.load_w,
+            surplus_rule:       p.surplus_rule  ?? slot.surplus_rule,
+            car_surplus:        p.car_surplus   ?? slot.car_surplus,
             price:     slot.price || p.price || 0,
             _injPrice: slot._injPrice || p.injection_price || 0,
           };
@@ -732,6 +741,7 @@ export class EmsDashboardCard extends HTMLElement {
       hass: this._hass,
       kwpEntityId: this._kwpEntityId,
       planningEntityId: this._planningEntityId,
+      surplusEntities: this._surplusEntities,
       onClose: () => this._closePopup(),
       onBack: () => this._renderPopup(fromIdx),
       onApplied: () => {

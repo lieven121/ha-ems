@@ -1,6 +1,13 @@
 import { Slot, CardConfig, BatteryGoal } from '../shared/types';
 import { priceColor, slotTimeStr } from '../shared/utils';
 
+/** Entity ids of the car-on-surplus switch and its thresholds. */
+export interface SurplusEntities {
+  toggle?: string;
+  soc?: string;
+  watts?: string;
+}
+
 export interface PlannerContext {
   sr: ShadowRoot;
   /** Every known slot, today and tomorrow alike: a plan may cross midnight. */
@@ -9,6 +16,7 @@ export interface PlannerContext {
   hass: any;
   kwpEntityId: string | null;
   planningEntityId: string | null;
+  surplusEntities: SurplusEntities;
   onClose: () => void;
   onBack: () => void;
   onApplied: () => void;
@@ -71,6 +79,32 @@ export function renderPlanner(ctx: PlannerContext): void {
 
   let amountMode: 'kwh' | 'slots' = 'kwh';
 
+  // Charging on excess solar is a standing rule, not a plan: it changes the
+  // integration's switch and numbers straight away.
+  const sx = ctx.surplusEntities;
+  const surplusOn = sx.toggle ? hass?.states[sx.toggle]?.state === 'on' : false;
+  const stateNum = (id?: string) => (id ? hass?.states[id]?.state ?? '' : '');
+  const surplusHtml = sx.toggle ? `
+    <div class="be-range-section">
+      <div class="be-section-label">Excess solar</div>
+      <div class="pl-grid">
+        <button class="toggle-btn${surplusOn ? ' on' : ''}" id="pl-surplus" style="--tc:#ca8a04"
+          title="In any slot not locked or planned for the car">
+          <div class="toggle-btn-dot"></div>☀🚗 Charge car on excess solar
+        </button>
+        ${sx.soc ? `<label class="param-row">
+          <span class="param-label">Battery above</span>
+          <input class="param-input" id="pl-surplus-soc" data-entity="${sx.soc}" type="number" min="0" max="100" step="1" value="${stateNum(sx.soc)}">
+          <span class="param-unit">%</span>
+        </label>` : ''}
+        ${sx.watts ? `<label class="param-row" title="Solar power minus the expected house load">
+          <span class="param-label">Surplus above</span>
+          <input class="param-input" id="pl-surplus-w" data-entity="${sx.watts}" type="number" min="0" max="20000" step="50" value="${stateNum(sx.watts)}">
+          <span class="param-unit">W</span>
+        </label>` : ''}
+      </div>
+    </div>` : '';
+
   const goalHtml = goal
     ? `<div class="pl-note">Active goal: <b>${goal.target_pct.toFixed(0)} %</b> by <b>${dayTimeLabel(new Date(goal.by))}</b></div>`
     : '<div class="pl-note">No goal set.</div>';
@@ -121,6 +155,8 @@ export function renderPlanner(ctx: PlannerContext): void {
         <button class="be-apply-btn" id="pl-car-apply">Schedule car</button>
       </div>
     </div>
+
+    ${surplusHtml}
 
     <div class="be-range-section">
       <div class="be-section-label">Have the battery charged by a time</div>
@@ -313,6 +349,28 @@ export function renderPlanner(ctx: PlannerContext): void {
     } catch (err: any) {
       failed(btn, err);
     }
+  });
+
+  // ── Excess solar ─────────────────────────────────────────────────────────
+  const surplusBtn = sr.getElementById('pl-surplus');
+  surplusBtn?.addEventListener('click', async () => {
+    const on = !surplusBtn.classList.contains('on');
+    surplusBtn.classList.toggle('on', on);
+    try {
+      await hass.callService('switch', on ? 'turn_on' : 'turn_off', { entity_id: sx.toggle });
+    } catch (err: any) {
+      surplusBtn.classList.toggle('on', !on);
+      console.error('Planner error:', err);
+    }
+  });
+  sr.querySelectorAll('#pl-surplus-soc, #pl-surplus-w').forEach(el => {
+    el.addEventListener('change', () => {
+      const inp = el as HTMLInputElement;
+      const value = parseFloat(inp.value);
+      if (isNaN(value)) return;
+      hass.callService('number', 'set_value', { entity_id: inp.dataset.entity, value })
+        .catch((err: any) => { inp.style.borderColor = '#dc2626'; console.error('Planner error:', err); });
+    });
   });
 
   sr.getElementById('pl-close')!.addEventListener('click', () => ctx.onClose());

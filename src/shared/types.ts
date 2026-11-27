@@ -26,6 +26,8 @@ export interface Slot {
   battery_prediction?: number | null;
   solar_w?: number | null;     // forecast PV output (W)
   load_w?: number | null;      // predicted house load incl. scheduled devices (W)
+  surplus_rule?: boolean;      // the car-on-surplus rule may take this slot over
+  car_surplus?: boolean;       // ...and is expected to: battery full, solar to spare
   battery_manual_override_w?: number;
   devices?: Array<{ name: string; control?: DeviceControl; mode?: string | null; manual_override_w?: number | null; allocated_wattage_w?: number | null }>;
 }

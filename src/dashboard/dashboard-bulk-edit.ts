@@ -1,5 +1,6 @@
 import { DeviceAvailable, Slot, CardConfig } from '../shared/types';
-import { esc, priceColor, slotTimeStr } from '../shared/utils';
+import { esc, priceColor, slotAction, slotTimeStr } from '../shared/utils';
+import { actionFormHtml, wireActionForm } from '../shared/action-form';
 
 export interface BulkEditContext {
   sr: ShadowRoot;
@@ -58,8 +59,10 @@ export function renderBulkEdit(ctx: BulkEditContext): void {
   let rangeTo = n - 1;
   let filterMode: 'all' | 'below' | 'above' = 'all';
   let threshold = Math.round((Math.min(...prices) + Math.max(...prices)) / 2 * 10) / 10;
-  let selAction = 'idle';
   let isDraggingRange = false;
+  // The slot where the drag started; the range spans from it to the pointer
+  // in either direction.
+  let dragAnchor = 0;
   let isDraggingThreshold = false;
   const deviceIntents: Record<string, DeviceIntent> = {};
   const deviceWattage: Record<string, number> = {};
@@ -83,7 +86,7 @@ export function renderBulkEdit(ctx: BulkEditContext): void {
 
   // ── Partial render: range picker, price filter, preview, apply label ─────
   // Deliberately does not touch the action form, so wattage / until-% values
-  // and watt-card toggles survive range and threshold changes.
+  // and toggles survive range and threshold changes.
   function renderRangeUI() {
     const matched = getMatchedIndices();
 
@@ -98,14 +101,23 @@ export function renderBulkEdit(ctx: BulkEditContext): void {
     const highlightHtml =
       `<div class="be-range-highlight" style="left:${leftPct}%;width:${widthPct}%"></div>`;
 
+    // The line is thin, so it carries a handle to grab instead.
     const thresholdHtml = filterMode !== 'all'
-      ? `<div class="be-threshold-line" id="be-threshold-line" style="bottom:${(threshold / maxP * 100).toFixed(1)}%">
-          <span class="be-threshold-label">${threshold.toFixed(1)} ct</span>
+      ? `<div class="be-threshold-line" id="be-threshold-line" style="bottom:${(Math.min(threshold, maxP) / maxP * 100).toFixed(1)}%">
+          <span class="be-threshold-handle" title="Drag to change the price">${threshold.toFixed(1)} ct</span>
         </div>`
       : '';
 
     sr.getElementById('be-mini-chart')!.innerHTML =
       `<div class="be-mini-bars">${barsHtml}</div>${highlightHtml}${thresholdHtml}`;
+
+    // What is planned now: one dot per slot that isn't idle.
+    sr.getElementById('be-mini-dots')!.innerHTML = slots.map((slot, i) => {
+      const a = slotAction(slot);
+      if (a.key === 'idle') return '';
+      const dimmed = i < rangeFrom || i > rangeTo ? ' dimmed' : '';
+      return `<div class="be-mini-dot${dimmed}" style="left:${((i + 0.5) / n * 100).toFixed(2)}%;background:${a.color}"></div>`;
+    }).join('');
 
     (sr.getElementById('be-from') as HTMLInputElement).value = slotTimeStr(slots[rangeFrom]);
     (sr.getElementById('be-to') as HTMLInputElement).value = slotTimeStr(slots[rangeTo]);
@@ -133,19 +145,6 @@ export function renderBulkEdit(ctx: BulkEditContext): void {
   }
 
   // ── Shell: rendered once ─────────────────────────────────────────────────
-  const actions = [
-    { key: 'idle', label: 'Idle', color: '#374151' },
-    { key: 'charge', label: 'Charge', color: '#16a34a' },
-    { key: 'use_net', label: 'Use Net', color: '#2563eb' },
-    { key: 'discharge', label: 'Discharge', color: '#dc2626' },
-    { key: 'car_charge', label: 'Car Charge', color: '#ca8a04' },
-  ];
-  const actionBtns = actions.map(a =>
-    `<button class="ap-btn${selAction === a.key ? ' sel' : ''}" data-action="${a.key}" style="--btn-c:${a.color}">
-      <div class="ap-dot" style="background:${a.color}"></div>${a.label}
-    </button>`
-  ).join('');
-
   const devicesHtml = devicesAvailable.length > 0 ? `
     <div class="dev-toggle-section">
       <div class="dev-toggle-title">Devices</div>
@@ -185,6 +184,7 @@ export function renderBulkEdit(ctx: BulkEditContext): void {
     <div class="be-range-section">
       <div class="be-section-label">Select Time Range</div>
       <div class="be-mini-chart" id="be-mini-chart"></div>
+      <div class="be-mini-dots" id="be-mini-dots"></div>
       <div class="be-time-row">
         <div class="be-time-field">
           <span class="be-time-label">From</span>
@@ -215,98 +215,20 @@ export function renderBulkEdit(ctx: BulkEditContext): void {
       <div class="be-preview-strip" id="be-preview-strip"></div>
     </div>
 
-    <div class="be-action-section">
+    <div class="be-action-section action-section">
       <div class="be-section-label">Action</div>
-      <div class="action-editor">
-        <div class="ap-grid">${actionBtns}</div>
-        <div class="params-panel">
-          <div class="action-params" id="be-params-charge" style="${selAction === 'charge' ? '' : 'display:none'}">
-            <div class="param-row">
-              <span class="param-label">Power</span>
-              <input class="param-input" id="be-charge-w" type="number" min="0" max="100000" step="100" value="${kwpW}">
-              <span class="param-unit">W</span>
-            </div>
-            <div class="param-row">
-              <span class="param-label">Until %<span class="param-optional">opt</span></span>
-              <input class="param-input" id="be-charge-until" type="number" min="0" max="100" step="1" value="">
-              <span class="param-unit">%</span>
-            </div>
-          </div>
-          <div class="action-params" id="be-params-discharge" style="${selAction === 'discharge' ? '' : 'display:none'}">
-            <div class="param-row">
-              <span class="param-label">Power</span>
-              <input class="param-input" id="be-discharge-w" type="number" min="0" max="100000" step="100" value="${kwpW}">
-              <span class="param-unit">W</span>
-            </div>
-            <div class="param-row">
-              <span class="param-label">Until %<span class="param-optional">opt</span></span>
-              <input class="param-input" id="be-discharge-until" type="number" min="0" max="100" step="1" value="">
-              <span class="param-unit">%</span>
-            </div>
-          </div>
-          <div class="action-params" id="be-params-use_net" style="${selAction === 'use_net' ? '' : 'display:none'}">
-            <div class="param-row">
-              <span class="param-label">Max draw<span class="param-optional">opt</span></span>
-              <input class="param-input" id="be-usenet-max" type="number" min="0" max="100000" step="100" value="${kwpW}">
-              <span class="param-unit">W</span>
-            </div>
-            <button class="toggle-btn on" id="be-usenet-solar" style="--tc:#f59e0b">
-              <div class="toggle-btn-dot"></div>☀ Use Solar
-            </button>
-          </div>
-          <div class="action-params" id="be-params-car_charge" style="${selAction === 'car_charge' ? '' : 'display:none'}">
-            <button class="toggle-btn on" id="be-car-solar" style="--tc:#f59e0b">
-              <div class="toggle-btn-dot"></div>☀ Use Solar
-            </button>
-            <div class="watt-card" id="be-wc-car-net" style="--wc-c:#2563eb">
-              <div class="watt-card-header">
-                <div class="watt-card-dot"></div>
-                <span class="watt-card-label">Net Grid</span>
-              </div>
-              <div class="watt-card-input-wrap">
-                <div class="watt-card-row">
-                  <span class="watt-card-sub-label">Wattage</span>
-                  <input class="param-input" id="be-car-net-w" type="number" min="0" max="100000" step="100" value="${kwpW}">
-                  <span class="param-unit">W</span>
-                </div>
-              </div>
-            </div>
-            <div class="watt-card" id="be-wc-car-bat" style="--wc-c:#7c3aed">
-              <div class="watt-card-header">
-                <div class="watt-card-dot"></div>
-                <span class="watt-card-label">Battery</span>
-              </div>
-              <div class="watt-card-input-wrap">
-                <div class="watt-card-row">
-                  <span class="watt-card-sub-label">Budget</span>
-                  <input class="param-input" id="be-car-bat-w" type="number" min="-100000" max="100000" step="100" value="${kwpW}">
-                  <span class="param-unit">W</span>
-                </div>
-                <div class="watt-card-hint">+ car draws from the battery &nbsp;·&nbsp; − charges the battery too</div>
-                <div class="watt-card-row">
-                  <span class="watt-card-sub-label">Until %<span class="param-optional">opt</span></span>
-                  <input class="param-input" id="be-car-bat-until" type="number" min="0" max="100" step="1" value="">
-                  <span class="param-unit">%</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      ${actionFormHtml('be', 'idle', {}, kwpW)}
     </div>
 
     ${devicesHtml}
 
-    <div class="action-locked-row be-locked-row">
-      <input type="checkbox" id="be-locked" checked>
-      <span class="action-locked-label">Lock edited slots (keep the optimizer off them)</span>
-    </div>
-    <div class="be-apply-row">
+    <div class="pop-foot be-foot">
+      <label class="pop-lock" title="Keep the optimizer off the edited slots">
+        <input type="checkbox" id="be-locked" checked>🔒 Lock
+      </label>
+      <button class="be-lock-btn" id="be-lock" title="Lock the matched slots without changing them">🔒</button>
+      <button class="be-lock-btn" id="be-unlock" title="Unlock the matched slots so the optimizer may re-plan them">🔓</button>
       <button class="be-apply-btn" id="be-apply"></button>
-    </div>
-    <div class="be-apply-row be-lock-row">
-      <button class="be-lock-btn" id="be-lock" title="Lock the matched slots without changing them">🔒 Lock</button>
-      <button class="be-lock-btn" id="be-unlock" title="Unlock the matched slots so the optimizer may re-plan them">🔓 Unlock</button>
     </div>
   `;
 
@@ -323,14 +245,14 @@ export function renderBulkEdit(ctx: BulkEditContext): void {
   };
   const beginRange = (clientX: number) => {
     isDraggingRange = true;
-    rangeFrom = idxAtClientX(clientX);
-    rangeTo = rangeFrom;
+    dragAnchor = idxAtClientX(clientX);
+    rangeFrom = rangeTo = dragAnchor;
     renderRangeUI();
   };
   const extendRange = (clientX: number) => {
-    const clamped = idxAtClientX(clientX);
-    if (clamped >= rangeFrom) rangeTo = clamped;
-    else { rangeTo = rangeFrom; rangeFrom = clamped; }
+    const idx = idxAtClientX(clientX);
+    rangeFrom = Math.min(dragAnchor, idx);
+    rangeTo = Math.max(dragAnchor, idx);
     renderRangeUI();
   };
 
@@ -415,37 +337,7 @@ export function renderBulkEdit(ctx: BulkEditContext): void {
     renderRangeUI();
   });
 
-  // Action buttons
-  sr.querySelectorAll('.be-action-section .ap-btn[data-action]').forEach(btn => {
-    btn.addEventListener('click', (e: Event) => {
-      e.stopPropagation();
-      selAction = (btn as HTMLElement).dataset.action!;
-      sr.querySelectorAll('.be-action-section .ap-btn[data-action]').forEach(b =>
-        b.classList.toggle('sel', b === btn));
-      ['charge', 'discharge', 'use_net', 'car_charge'].forEach(a => {
-        const el = sr.getElementById(`be-params-${a}`) as HTMLElement | null;
-        if (el) el.style.display = a === selAction ? '' : 'none';
-      });
-    });
-  });
-
-  // Toggle buttons
-  ['be-usenet-solar', 'be-car-solar'].forEach(id => {
-    const btn = sr.getElementById(id);
-    if (btn) btn.addEventListener('click', (e: Event) => { e.stopPropagation(); btn.classList.toggle('on'); });
-  });
-
-  // Watt-cards
-  ['be-wc-car-net', 'be-wc-car-bat'].forEach(id => {
-    const card = sr.getElementById(id);
-    if (!card) return;
-    card.addEventListener('click', (e: Event) => {
-      e.stopPropagation();
-      if ((e.target as HTMLElement).tagName === 'INPUT') return;
-      card.classList.toggle('on');
-    });
-    card.querySelectorAll('input').forEach(inp => inp.addEventListener('click', (e: Event) => e.stopPropagation()));
-  });
+  const form = wireActionForm(sr, 'be', 'idle', {}, kwpW);
 
   // Device cards cycle unchanged → schedule → clear
   sr.querySelectorAll('.dev-toggle-card[data-dev]').forEach(card => {
@@ -479,11 +371,6 @@ export function renderBulkEdit(ctx: BulkEditContext): void {
     });
   });
 
-  // Prevent input clicks from closing the overlay
-  sr.querySelectorAll('.be-action-section .param-input, .be-time-input, .be-filter-input, #be-locked').forEach(el => {
-    el.addEventListener('click', (e: Event) => e.stopPropagation());
-  });
-
   // Apply
   sr.getElementById('be-apply')!.addEventListener('click', async (e: Event) => {
     e.stopPropagation();
@@ -495,39 +382,10 @@ export function renderBulkEdit(ctx: BulkEditContext): void {
     applyBtn.textContent = `Applying to ${matched.length} slots…`;
 
     const commonBase = { device_id: deviceId || entryId };
-    const numVal = (id: string, fallback: number) => {
-      const v = parseFloat((sr.getElementById(id) as HTMLInputElement)?.value);
-      return isNaN(v) ? fallback : v;
-    };
-    const optNumVal = (id: string): number | null => {
-      const v = (sr.getElementById(id) as HTMLInputElement)?.value;
-      return v !== '' && v != null ? parseFloat(v) : null;
-    };
 
     try {
       // Read the form once; every matched slot gets the same edit.
-      const actionFields: Record<string, any> = { action: selAction };
-      if (selAction === 'charge') {
-        const untilPct = optNumVal('be-charge-until');
-        actionFields.wattage = numVal('be-charge-w', kwpW);
-        if (untilPct != null) actionFields.until_pct = untilPct;
-      } else if (selAction === 'discharge') {
-        const untilPct = optNumVal('be-discharge-until');
-        actionFields.wattage = numVal('be-discharge-w', kwpW);
-        if (untilPct != null) actionFields.until_pct = untilPct;
-      } else if (selAction === 'use_net') {
-        const maxWatts = optNumVal('be-usenet-max');
-        actionFields.use_solar = sr.getElementById('be-usenet-solar')?.classList.contains('on') ?? true;
-        if (maxWatts != null) actionFields.max_wattage = maxWatts;
-      } else if (selAction === 'car_charge') {
-        const netCardOn = sr.getElementById('be-wc-car-net')?.classList.contains('on') ?? false;
-        const batCardOn = sr.getElementById('be-wc-car-bat')?.classList.contains('on') ?? false;
-        const batUntil = batCardOn ? optNumVal('be-car-bat-until') : null;
-        actionFields.use_solar = sr.getElementById('be-car-solar')?.classList.contains('on') ?? true;
-        actionFields.use_net_wattage = netCardOn ? numVal('be-car-net-w', 0) : 0;
-        actionFields.use_battery_wattage = batCardOn ? numVal('be-car-bat-w', 0) : 0;
-        if (batUntil != null) actionFields.use_battery_until_pct = batUntil;
-      }
+      const actionFields = form.read();
 
       // Shape each device to how it is controlled: a wattage, a mode, or
       // nothing at all for plain on/off devices. null unschedules it.
@@ -580,7 +438,7 @@ export function renderBulkEdit(ctx: BulkEditContext): void {
         device_id: deviceId || entryId,
         slots: matched.map(idx => ({ time: slots[idx].start ?? slots[idx].time, locked })),
       });
-      btn.textContent = locked ? `✓ Locked ${matched.length}` : `✓ Unlocked ${matched.length}`;
+      btn.textContent = `✓ ${matched.length}`;
       setTimeout(() => {
         ctx.onApplied();
         ctx.onClose();

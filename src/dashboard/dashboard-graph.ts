@@ -1,6 +1,7 @@
 import { Slot, CardConfig, BatteryGoal } from '../shared/types';
 import { BATT_AXIS_TICKS, CHART_H, Y_STEPS } from '../shared/constants';
 import { esc, priceColor, priceScore, priceScoreColor, slotAction, slotHasCar, slotTimeStr, slotEndTimeStr } from '../shared/utils';
+import { actionColor, slotSummary } from '../shared/action-form';
 
 export function renderMainChart(
   sr: ShadowRoot,
@@ -78,17 +79,14 @@ export function renderMainChart(
   // Action strip
   sr.getElementById('action-strip')!.innerHTML = slots.map((slot, i) => {
     const act = slotAction(slot);
-    const hasCar = slotHasCar(slot);
-    let bg: string;
-    if (act.key === 'car_charge') {
-      bg = '#ca8a04';
-    } else if (hasCar) {
-      bg = `linear-gradient(to right, ${act.color} 60%, #ca8a04 60%)`;
-    } else {
-      bg = act.color;
-    }
-    const title = hasCar && act.key !== 'car_charge' ? `${act.label} + Car` : act.label;
-    return `<div class="ac" data-i="${i}" style="background:${bg}" title="${title}"></div>`;
+    const hasCar = slotHasCar(slot) || !!slot.car_surplus;
+    // A slot with a condition shows its fallback in the lower half.
+    const other = slot.action_config?.when?.length ? slot.action_config.otherwise?.action ?? 'idle' : null;
+    let bg = other ? `linear-gradient(to bottom, ${act.color} 55%, ${actionColor(other)} 55%)` : act.color;
+    if (hasCar && act.key !== 'car_charge') bg = `linear-gradient(to right, transparent 60%, #ca8a04 60%), ${bg}`;
+    let title = slotSummary(act.key, slot.action_config);
+    if (slot.car_surplus && act.key !== 'car_charge') title += ' · car on excess solar';
+    return `<div class="ac" data-i="${i}" style="background:${bg}" title="${esc(title)}"></div>`;
   }).join('');
   sr.getElementById('action-strip')!.querySelectorAll('.ac').forEach(el => {
     el.addEventListener('click', () => onSlotClick(+(el as HTMLElement).dataset.i!));

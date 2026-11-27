@@ -115,16 +115,16 @@ header span{font-family:var(--code-font-family, monospace);font-size:10px;color:
 /* \u2500\u2500 Popup \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
 #overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.62);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);z-index:9999;align-items:center;justify-content:center;}
 #overlay.open{display:flex;}
-#popup{background:var(--bg);border:1px solid var(--border);border-radius:14px;width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 80px);overflow-y:auto;box-shadow:0 32px 80px rgba(0,0,0,.85);animation:popIn .17s cubic-bezier(.34,1.56,.64,1);container-type:inline-size;container-name:popup;}
+#popup{background:var(--bg);border:1px solid var(--border);border-radius:14px;width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 48px);overflow-y:auto;overscroll-behavior:contain;box-shadow:0 32px 80px rgba(0,0,0,.85);animation:popIn .17s cubic-bezier(.34,1.56,.64,1);container-type:inline-size;container-name:popup;}
 @keyframes popIn{from{opacity:0;transform:scale(.92) translateY(10px);}to{opacity:1;transform:scale(1) translateY(0);}}
 
-.ph{padding:14px 16px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
-.ph-nav{display:flex;align-items:center;gap:10px;}
-.ph-nav-btn{background:none;border:1px solid var(--border);color:var(--text-dim);width:26px;height:26px;border-radius:6px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;transition:all .12s;flex-shrink:0;font-family:var(--code-font-family, monospace);}
+.ph{position:sticky;top:0;z-index:3;background:var(--bg);padding:8px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;}
+.ph-mid{flex:1;min-width:0;}
+.ph-nav-btn{background:none;border:1px solid var(--border);color:var(--text-dim);width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .12s;flex-shrink:0;font-family:var(--code-font-family, monospace);}
 .ph-nav-btn:hover{border-color:var(--text-bright);color:var(--text-bright);}
 .ph-nav-btn:disabled{opacity:.2;cursor:default;}
-.ph-title{font-family:var(--code-font-family, monospace);font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.12em;margin-bottom:3px;}
-.ph-time{font-family:var(--code-font-family, monospace);font-size:17px;font-weight:700;color:var(--text-bright);}
+.ph-time{font-family:var(--code-font-family, monospace);font-size:16px;font-weight:700;color:var(--text-bright);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ph-sum{font-family:var(--code-font-family, monospace);font-size:10px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
 .ph-close{background:none;border:1px solid var(--border);color:var(--text-dim);width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;transition:all .12s;flex-shrink:0;}
 .ph-close:hover{border-color:var(--text-bright);color:var(--text-bright);}
 .ph-actions{display:flex;align-items:center;gap:6px;flex-shrink:0;}
@@ -133,16 +133,13 @@ header span{font-family:var(--code-font-family, monospace);font-size:10px;color:
 .ph-bulk-btn ha-icon{--mdc-icon-size:16px;}
 
 /* Keyboard shortcut legend at the foot of the slot dialog; touch screens have no keys. */
-.pop-keys{display:flex;flex-wrap:wrap;gap:4px 12px;padding:10px 16px 14px;border-top:1px solid var(--border);font-family:var(--code-font-family, monospace);font-size:9px;color:var(--text-dim);}
+.pop-keys{display:flex;flex-wrap:wrap;gap:4px 12px;padding:8px 12px;border-top:1px solid var(--border);font-family:var(--code-font-family, monospace);font-size:9px;color:var(--text-dim);}
 .pop-keys kbd{font-family:inherit;font-size:9px;border:1px solid var(--border);border-radius:3px;padding:0 4px;color:var(--text-bright);}
 @media (hover:none){.pop-keys{display:none;}}
 
 /* Popup mini nav bar */
-.pop-nav-wrap{padding:10px 16px 12px;border-bottom:1px solid var(--border);}
-.pop-nav-label{font-family:var(--code-font-family, monospace);font-size:8px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;}
-.pop-nav-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;}
-.pop-nav-head .pop-nav-label{margin-bottom:0;}
-.pop-day-btns{display:flex;gap:4px;}
+.pop-nav-wrap{padding:8px 12px 10px;border-bottom:1px solid var(--border);}
+.pop-day-btns{display:flex;gap:4px;margin-bottom:6px;}
 .pop-day-btn{background:none;border:1px solid var(--border);color:var(--text-dim);border-radius:5px;padding:2px 8px;cursor:pointer;font-family:var(--code-font-family, monospace);font-size:9px;text-transform:uppercase;letter-spacing:.06em;transition:all .12s;}
 .pop-day-btn:hover{border-color:var(--text-bright);color:var(--text-bright);}
 .pop-day-btn.active{border-color:var(--accent);color:var(--accent);cursor:default;}
@@ -155,69 +152,47 @@ header span{font-family:var(--code-font-family, monospace);font-size:10px;color:
 .pop-nav-now{position:absolute;top:-3px;bottom:-3px;width:2px;border-radius:1px;background:var(--now);transform:translateX(-50%);pointer-events:none;opacity:.85;}
 
 /* Price trio */
-.price-trio{display:flex;align-items:center;gap:4px;padding:12px 16px;border-bottom:1px solid var(--border);}
-.pt-slot{flex:1;background:var(--surface2);border-radius:8px;padding:9px 10px 7px;min-width:0;}
+.price-trio{display:flex;align-items:center;gap:4px;padding:8px 12px;border-bottom:1px solid var(--border);}
+.pt-slot{flex:1;background:var(--surface2);border-radius:8px;padding:6px 8px 5px;min-width:0;}
 .pt-slot.cur{background:var(--surface);outline:1px solid var(--border);}
 .pt-slot.is-now{outline:1px solid var(--now);box-shadow:0 0 10px rgba(250,204,21,.25);}
 .pt-slot.nav{cursor:pointer;transition:background .12s;}
 .pt-slot.nav:hover{background:var(--surface);}
 .pt-label{font-family:var(--code-font-family, monospace);font-size:8px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:2px;}
-.pt-time{font-family:var(--code-font-family, monospace);font-size:9px;color:var(--text-dim);margin-bottom:4px;}
+.pt-time{font-family:var(--code-font-family, monospace);font-size:9px;color:var(--text-dim);margin-bottom:2px;}
 .pt-price{font-family:var(--code-font-family, monospace);font-size:15px;font-weight:700;line-height:1;white-space:nowrap;}
 .pt-unit{font-size:9px;font-weight:400;opacity:.7;margin-left:1px;}
-.pt-inj{font-family:var(--code-font-family,monospace);font-size:10px;color:var(--text-dim);margin-top:2px;}
 .pt-score{font-family:var(--code-font-family,monospace);font-size:10px;font-weight:600;margin-top:2px;}
-.pt-bar{height:3px;border-radius:2px;margin-top:5px;}
+.pt-bar{height:3px;border-radius:2px;margin-top:4px;}
 .pt-arrow{color:var(--border);font-size:16px;flex-shrink:0;padding-bottom:6px;}
 
-/* Popup detail section */
-.pop-detail{padding:8px 16px 12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:0 12px;}
-.pop-section-title{font-family:var(--code-font-family, monospace);font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.12em;margin-bottom:8px;}
-.pop-row{display:flex;flex-direction:column;gap:2px;padding:6px 0;border-bottom:1px solid var(--border);}
-.pop-row:last-child{border-bottom:none;}
-.pop-row-label{font-family:var(--code-font-family,monospace);font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;}
-.pop-row-value{font-family:var(--code-font-family,monospace);font-size:13px;color:var(--text-bright);font-weight:600;}
+/* Slot details: one line of chips; the label is the tooltip */
+.pop-chips{display:flex;flex-wrap:wrap;gap:2px 12px;padding:6px 12px;border-bottom:1px solid var(--border);font-family:var(--code-font-family,monospace);font-size:11px;color:var(--text-bright);}
+.pop-chip{white-space:nowrap;}
+.edit-hint{font-family:var(--code-font-family, monospace);font-size:9px;color:var(--text-dim);line-height:1.5;margin:8px 12px;padding:6px 8px;background:var(--surface2);border-radius:4px;border:1px solid var(--border);}
 
-.device-list{margin-top:8px;display:flex;flex-direction:column;gap:5px;}
-.device-item{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--surface2);border-radius:7px;border:1px solid var(--border);}
-.device-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
-.device-name{font-family:var(--code-font-family, monospace);font-size:11px;color:var(--text-bright);flex:1;}
-.device-watt{font-family:var(--code-font-family, monospace);font-size:10px;color:var(--text-dim);}
-
-/* Edit section */
-.edit-section{padding:0 16px 16px;}
-.edit-row{display:flex;align-items:center;gap:8px;margin-top:8px;}
-.edit-label{font-family:var(--code-font-family, monospace);font-size:9px;color:var(--text-dim);white-space:nowrap;min-width:80px;}
-.edit-input{background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text-bright);font-family:var(--code-font-family, monospace);font-size:11px;padding:5px 8px;width:100%;transition:border-color .12s;}
-.edit-input:focus{outline:none;border-color:var(--accent);}
-.edit-unit{font-family:var(--code-font-family, monospace);font-size:9px;color:var(--text-dim);white-space:nowrap;}
-.edit-btn{margin-top:10px;background:var(--accent);border:none;border-radius:6px;color:white;font-family:var(--code-font-family, monospace);font-size:10px;font-weight:600;padding:7px 14px;cursor:pointer;transition:opacity .12s;width:100%;letter-spacing:.05em;}
-.edit-btn:hover{opacity:.85;}
-.edit-hint{font-family:var(--code-font-family, monospace);font-size:8px;color:var(--text-dim);margin-top:8px;line-height:1.5;padding:6px 8px;background:var(--surface2);border-radius:4px;border:1px solid var(--border);}
-
-/* Action editor */
-.action-section{padding:12px 16px 16px;border-top:1px solid var(--border);}
-.action-section-title{font-family:var(--code-font-family,monospace);font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.12em;margin-bottom:8px;}
-.action-columns{display:flex;gap:10px;}
-.action-col{flex:1;min-width:0;}
-.action-col-title{font-family:var(--code-font-family,monospace);font-size:8px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;opacity:.6;}
-/* Action editor: stacked by default, side-by-side on wider popup */
-.action-editor{display:flex;flex-direction:column;gap:10px;}
+/* Action editor (shared/action-form.ts): stacked by default, side-by-side on a wider popup */
+.action-section{padding:10px 12px;}
+.action-editor{display:flex;flex-direction:column;gap:8px;}
 @container popup (min-width:460px){
   .action-editor{flex-direction:row;align-items:flex-start;}
   .ap-grid{min-width:130px;flex-shrink:0;}
   .params-panel{flex:1;min-width:0;}
 }
-.ap-grid{display:flex;flex-direction:column;gap:5px;}
-.ap-btn{display:flex;align-items:center;gap:7px;padding:8px 10px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;font-family:var(--code-font-family,monospace);font-size:11px;font-weight:500;transition:all .12s;text-align:left;width:100%;}
+.ap-grid{display:flex;flex-direction:column;gap:4px;}
+@container popup (max-width:459px){
+  .ap-grid{display:grid;grid-template-columns:repeat(3,1fr);}
+}
+.ap-btn{display:flex;align-items:center;gap:7px;padding:7px 9px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;font-family:var(--code-font-family,monospace);font-size:11px;font-weight:500;transition:all .12s;text-align:left;width:100%;white-space:nowrap;}
 .ap-btn:hover{border-color:var(--btn-c,#888);color:var(--btn-c,#888);}
 .ap-btn.sel{border-color:var(--btn-c);color:var(--btn-c);background:color-mix(in srgb,var(--btn-c) 14%,var(--surface));}
 .ap-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
 .params-panel{display:flex;flex-direction:column;gap:8px;}
 .action-params{display:flex;flex-direction:column;gap:6px;}
+.action-params[hidden]{display:none;}
 .param-row{display:flex;align-items:center;gap:7px;}
-.param-label{font-family:var(--code-font-family,monospace);font-size:9px;color:var(--text-dim);white-space:nowrap;min-width:60px;}
-.param-input{background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text-bright);font-family:var(--code-font-family,monospace);font-size:11px;padding:5px 8px;width:100%;transition:border-color .12s;}
+.param-label{font-family:var(--code-font-family,monospace);font-size:9px;color:var(--text-dim);white-space:nowrap;min-width:76px;}
+.param-input{background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text-bright);font-family:var(--code-font-family,monospace);font-size:11px;padding:5px 8px;width:100%;min-width:0;transition:border-color .12s;}
 .param-input:focus{outline:none;border-color:var(--accent);}
 .param-unit{font-family:var(--code-font-family,monospace);font-size:9px;color:var(--text-dim);white-space:nowrap;}
 .param-optional{font-size:8px;color:var(--text-dim);margin-left:2px;opacity:.6;}
@@ -227,24 +202,26 @@ header span{font-family:var(--code-font-family, monospace);font-size:10px;color:
 .toggle-btn.on{border-color:var(--tc,#888);color:var(--tc,#888);background:color-mix(in srgb,var(--tc,#888) 14%,var(--surface));}
 .toggle-btn-dot{width:8px;height:8px;border-radius:50%;background:var(--tc,#888);opacity:.35;flex-shrink:0;}
 .toggle-btn.on .toggle-btn-dot{opacity:1;}
-/* Watt-card: clickable card that toggles and reveals an embedded input */
-.watt-card{border:1px solid var(--border);border-radius:8px;overflow:hidden;cursor:pointer;transition:border-color .12s;}
-.watt-card:hover{border-color:var(--wc-c,#888);}
-.watt-card.on{border-color:var(--wc-c,#888);}
-.watt-card-header{display:flex;align-items:center;gap:7px;padding:7px 10px;}
-.watt-card-dot{width:8px;height:8px;border-radius:50%;background:var(--wc-c,#888);opacity:.35;flex-shrink:0;}
-.watt-card.on .watt-card-dot{opacity:1;}
-.watt-card-label{font-family:var(--code-font-family,monospace);font-size:11px;color:var(--text-dim);flex:1;}
-.watt-card.on .watt-card-label{color:var(--wc-c,#888);}
-.watt-card-input-wrap{display:none;padding:6px 10px 8px;border-top:1px solid var(--border);gap:4px;flex-direction:column;}
-.watt-card.on .watt-card-input-wrap{display:flex;}
-.watt-card-row{display:flex;align-items:center;gap:7px;}
-.watt-card-sub-label{font-family:var(--code-font-family,monospace);font-size:9px;color:var(--text-dim);white-space:nowrap;min-width:50px;}
-.watt-card-hint{font-family:var(--code-font-family,monospace);font-size:8px;color:var(--text-dim);opacity:.75;line-height:1.4;}
-.car-sep{width:1px;background:var(--border);flex-shrink:0;margin:0 4px;}
-.action-locked-row{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);}
-.action-locked-label{font-family:var(--code-font-family,monospace);font-size:9px;color:var(--text-dim);}
-.action-btn-row{display:flex;gap:6px;margin-top:10px;}
+/* "Only when ..., otherwise ..." */
+.af-cond{display:flex;flex-direction:column;gap:6px;}
+.af-label{font-family:var(--code-font-family,monospace);font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;}
+.af-cond-row{display:flex;align-items:center;gap:6px;}
+.af-select{background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text-bright);font-family:var(--code-font-family,monospace);font-size:11px;padding:5px 6px;cursor:pointer;}
+.af-select:focus{outline:none;border-color:var(--accent);}
+.af-x{background:none;border:1px solid var(--border);color:var(--text-dim);border-radius:5px;width:26px;height:26px;flex-shrink:0;cursor:pointer;font-size:11px;}
+.af-x:hover{border-color:#dc2626;color:#dc2626;}
+.af-link{align-self:flex-start;background:none;border:none;color:var(--accent);font-family:var(--code-font-family,monospace);font-size:10px;cursor:pointer;padding:2px 0;}
+.af-link:hover{text-decoration:underline;}
+.af-other{display:flex;flex-wrap:wrap;align-items:center;gap:4px;}
+.af-other .af-label{margin-right:4px;}
+.af-other-btn{padding:4px 8px;border-radius:5px;border:1px solid var(--border);background:var(--surface2);color:var(--text-dim);font-family:var(--code-font-family,monospace);font-size:10px;cursor:pointer;transition:all .12s;}
+.af-other-btn:hover{border-color:var(--btn-c);color:var(--btn-c);}
+.af-other-btn.sel{border-color:var(--btn-c);color:var(--btn-c);background:color-mix(in srgb,var(--btn-c) 14%,var(--surface));}
+/* Sticky footer: lock, copy / paste, apply */
+.pop-foot{position:sticky;bottom:0;z-index:3;display:flex;align-items:center;gap:6px;padding:8px 12px;border-top:1px solid var(--border);background:var(--bg);}
+.pop-lock{display:flex;align-items:center;gap:6px;margin-right:auto;font-family:var(--code-font-family,monospace);font-size:11px;color:var(--text-dim);white-space:nowrap;cursor:pointer;}
+.pop-foot .action-apply-btn,.pop-foot .be-apply-btn{flex:0 1 auto;min-width:120px;padding:9px 16px;}
+.pop-foot .be-lock-btn{flex:0 0 auto;padding:8px 10px;}
 .action-copy-btn,.action-paste-btn{display:flex;align-items:center;justify-content:center;padding:8px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-dim);cursor:pointer;transition:background .12s,color .12s,border-color .12s;--mdc-icon-size:18px;}
 .action-copy-btn:hover{background:var(--border);color:var(--text-bright);}
 .action-copy-btn.success{background:#16a34a;color:#fff;border-color:#16a34a;}
@@ -276,7 +253,7 @@ header[hidden]{display:none;}
 
 /* \u2500\u2500 Bulk Edit Modal \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
 
-.be-header{padding:14px 16px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
+.be-header{position:sticky;top:0;z-index:3;background:var(--bg);padding:8px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
 .be-title{font-family:var(--code-font-family, monospace);font-size:12px;font-weight:600;color:var(--text-bright);text-transform:uppercase;letter-spacing:.08em;}
 .be-back{background:none;border:1px solid var(--border);color:var(--text-dim);width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;transition:all .12s;flex-shrink:0;font-family:var(--code-font-family, monospace);}
 .be-back:hover{border-color:var(--text-bright);color:var(--text-bright);}
@@ -285,16 +262,19 @@ header[hidden]{display:none;}
 .be-close:hover{border-color:var(--text-bright);color:var(--text-bright);}
 
 /* Range mini chart */
-.be-range-section{padding:12px 16px;border-bottom:1px solid var(--border);}
+.be-range-section{padding:10px 12px;border-bottom:1px solid var(--border);}
 .be-section-label{font-family:var(--code-font-family, monospace);font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;}
-.be-mini-chart{position:relative;height:50px;border-radius:6px;overflow:hidden;cursor:crosshair;user-select:none;background:var(--surface2);touch-action:none;}
-.be-mini-bars{display:flex;align-items:flex-end;height:100%;gap:0;}
+.be-mini-chart{position:relative;height:50px;border-radius:6px;cursor:crosshair;user-select:none;background:var(--surface2);touch-action:none;}
+.be-mini-bars{display:flex;align-items:flex-end;height:100%;gap:0;border-radius:6px;overflow:hidden;}
+.be-mini-dots{position:relative;height:9px;margin-top:3px;pointer-events:none;}
+.be-mini-dot{position:absolute;top:2px;width:5px;height:5px;border-radius:50%;transform:translateX(-50%);}
+.be-mini-dot.dimmed{opacity:.3;}
 .be-mini-bar{flex:1;min-width:0;transition:opacity .08s;}
 .be-mini-bar.dimmed{opacity:.3;}
 .be-range-highlight{position:absolute;top:0;bottom:0;background:rgba(59,130,246,.2);border-left:2px solid var(--accent);border-right:2px solid var(--accent);pointer-events:none;transition:left .05s,width .05s;}
 .be-threshold-line{position:absolute;left:0;right:0;height:2px;background:var(--now);cursor:ns-resize;pointer-events:auto;z-index:5;}
 .be-threshold-line::after{content:'';position:absolute;left:0;right:0;top:-4px;bottom:-4px;}
-.be-threshold-label{position:absolute;right:4px;top:-14px;font-family:var(--code-font-family, monospace);font-size:8px;color:var(--now);white-space:nowrap;}
+.be-threshold-handle{position:absolute;right:-4px;top:50%;transform:translateY(-50%);padding:3px 8px;border-radius:10px;background:var(--now);color:#000;font-family:var(--code-font-family, monospace);font-size:9px;font-weight:600;white-space:nowrap;cursor:ns-resize;box-shadow:0 1px 4px rgba(0,0,0,.5);}
 
 /* From/To inputs */
 .be-time-row{display:flex;gap:10px;margin-top:8px;align-items:center;}
@@ -304,7 +284,7 @@ header[hidden]{display:none;}
 .be-time-input:focus{outline:none;border-color:var(--accent);}
 
 /* Price filter */
-.be-filter-section{padding:12px 16px;border-bottom:1px solid var(--border);}
+.be-filter-section{padding:8px 12px;border-bottom:1px solid var(--border);}
 .be-filter-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
 .be-filter-btn{padding:5px 10px;border-radius:5px;border:1px solid var(--border);background:var(--surface2);color:var(--text-dim);cursor:pointer;font-family:var(--code-font-family,monospace);font-size:10px;transition:all .12s;}
 .be-filter-btn:hover{border-color:var(--accent);}
@@ -314,7 +294,7 @@ header[hidden]{display:none;}
 .be-filter-unit{font-family:var(--code-font-family,monospace);font-size:9px;color:var(--text-dim);}
 
 /* Preview bar */
-.be-preview-section{padding:10px 16px;border-bottom:1px solid var(--border);}
+.be-preview-section{padding:8px 12px;border-bottom:1px solid var(--border);}
 .be-preview-info{font-family:var(--code-font-family,monospace);font-size:10px;color:var(--text-dim);margin-bottom:6px;}
 .be-preview-info b{color:var(--text-bright);}
 .be-preview-strip{display:flex;height:14px;border-radius:4px;overflow:hidden;gap:0;}
@@ -323,10 +303,10 @@ header[hidden]{display:none;}
 .be-preview-seg.unmatched{opacity:.2;}
 
 /* Action section inside bulk edit */
-.be-action-section{padding:12px 16px;max-height:300px;overflow-y:auto;}
+.be-action-section .be-section-label{margin-bottom:6px;}
 
 /* Device toggles (shared between single-slot and bulk edit) */
-.dev-toggle-section{padding:10px 16px;border-top:1px solid var(--border);}
+.dev-toggle-section{padding:8px 12px;border-top:1px solid var(--border);}
 .dev-toggle-title{font-family:var(--code-font-family,monospace);font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;}
 .dev-toggle-list{display:flex;flex-direction:column;gap:5px;}
 .dev-toggle-card{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);cursor:pointer;transition:all .12s;}
@@ -350,17 +330,31 @@ header[hidden]{display:none;}
 .be-range-count{font-family:var(--code-font-family,monospace);font-size:9px;color:var(--text-dim);}
 
 /* Apply row in bulk edit */
-.be-apply-row{padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;}
+
 .be-apply-btn{flex:1;padding:10px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-family:var(--code-font-family,monospace);font-size:12px;font-weight:600;cursor:pointer;transition:background .12s;}
 .be-apply-btn:hover{background:#2563eb;}
 .be-apply-btn.success{background:#16a34a;}
 .be-apply-btn.error{background:#dc2626;}
 .be-apply-btn:disabled{opacity:.5;cursor:default;}
-.be-locked-row{margin:0;padding:10px 16px 0;}
-.be-lock-row{border-top:none;padding-top:0;}
 .be-lock-btn{flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:transparent;color:inherit;font-family:var(--code-font-family,monospace);font-size:11px;cursor:pointer;transition:background .12s;}
 .be-lock-btn:hover{background:rgba(127,127,127,.12);}
 .be-lock-btn:disabled{opacity:.5;cursor:default;}
+
+/* Phones: the dialog takes the whole screen */
+@media (max-width:600px){
+  #overlay{align-items:stretch;}
+  #popup{width:100vw;height:100vh;height:100dvh;max-height:none;border:none;border-radius:0;animation:none;display:flex;flex-direction:column;}
+  /* The footer sits at the bottom of the screen even when the content is short. */
+  .pop-foot{margin-top:auto;}
+  .pt-price{font-size:13px;}
+}
+/* Touch: bigger targets, and 16px inputs so iOS doesn't zoom on focus */
+@media (hover:none){
+  .ap-btn,.toggle-btn,.af-other-btn{min-height:40px;}
+  .ph-nav-btn,.ph-close,.ph-bulk-btn,.af-x{width:36px;height:36px;}
+  .param-input,.af-select{font-size:16px;padding:6px 8px;}
+  .be-threshold-handle{padding:6px 12px;font-size:11px;}
+}
 
 /* Light theme */
 .root.theme-light {
@@ -482,6 +476,226 @@ function slotEndTimeStr(slots, idx) {
   return `${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`;
 }
 
+// src/shared/action-form.ts
+var ACTION_DEFS = [
+  { key: "idle", label: "Idle", color: "#374151" },
+  { key: "charge", label: "Charge", color: "#16a34a" },
+  { key: "use_net", label: "Use Net", color: "#2563eb" },
+  { key: "discharge", label: "Discharge", color: "#dc2626" },
+  { key: "car_charge", label: "Car Charge", color: "#ca8a04" }
+];
+var ACTION_BY_KEY = Object.fromEntries(ACTION_DEFS.map((a) => [a.key, a]));
+function actionLabel(key) {
+  return ACTION_BY_KEY[key]?.label ?? key;
+}
+function actionColor(key) {
+  return ACTION_BY_KEY[key]?.color ?? "#374151";
+}
+function buttonColor(a) {
+  return a.key === "idle" ? "#9ca3af" : a.color;
+}
+var COND_META = {
+  soc: { name: "battery", unit: "%", step: 1, def: 30 },
+  solar: { name: "solar", unit: "W", step: 100, def: 1500 },
+  surplus: { name: "surplus", unit: "W", step: 100, def: 1500 }
+};
+var MAX_CONDITIONS = 2;
+function describeConditions(conds) {
+  return conds.map((c) => {
+    const m = COND_META[c.on];
+    return `${m?.name ?? c.on} ${c.op === "above" ? "\u2265" : "\u2264"} ${c.value} ${m?.unit ?? ""}`;
+  }).join(" and ");
+}
+function slotSummary(action, cfg) {
+  const when = cfg?.when ?? [];
+  if (!when.length) return actionLabel(action);
+  return `${actionLabel(action)} while ${describeConditions(when)}, otherwise ${actionLabel(cfg?.otherwise?.action ?? "idle")}`;
+}
+function defaultFields(action, kwpW) {
+  if (action === "charge" || action === "discharge") return { wattage: kwpW };
+  if (action === "use_net") return { use_solar: true };
+  if (action === "car_charge") return { use_solar: true, use_net_wattage: 0 };
+  return {};
+}
+function paramRow(label, id, unit, value, opt = {}) {
+  return `<label class="param-row"${opt.title ? ` title="${esc(opt.title)}"` : ""}>
+    <span class="param-label">${label}${opt.optional ? '<span class="param-optional">opt</span>' : ""}</span>
+    <input class="param-input" id="${id}" type="number" min="${opt.min ?? 0}" max="${opt.max ?? 1e5}" step="${opt.step ?? 100}" value="${value ?? ""}">
+    <span class="param-unit">${unit}</span>
+  </label>`;
+}
+function toggle(id, label, on) {
+  return `<button class="toggle-btn${on ? " on" : ""}" id="${id}" style="--tc:#f59e0b">
+    <div class="toggle-btn-dot"></div>${label}
+  </button>`;
+}
+function actionFormHtml(p, action, cfg, kwpW) {
+  const v = (a, key, fallback) => a === action ? cfg[key] ?? fallback : fallback;
+  const shown = (a) => a === action ? "" : " hidden";
+  const buttons = ACTION_DEFS.map((a) => `<button class="ap-btn${action === a.key ? " sel" : ""}" data-action="${a.key}" style="--btn-c:${buttonColor(a)}">
+      <div class="ap-dot" style="background:${a.color}"></div>${a.label}
+    </button>`).join("");
+  return `<div class="action-editor" id="${p}-af">
+    <div class="ap-grid">${buttons}</div>
+    <div class="params-panel">
+      <div class="action-params" data-params="charge"${shown("charge")}>
+        ${paramRow("Power", `${p}-charge-w`, "W", v("charge", "wattage", kwpW))}
+        ${paramRow("Until", `${p}-charge-until`, "%", v("charge", "until_pct", ""), { optional: true, max: 100, step: 1 })}
+      </div>
+      <div class="action-params" data-params="discharge"${shown("discharge")}>
+        ${paramRow("Power", `${p}-discharge-w`, "W", v("discharge", "wattage", kwpW))}
+        ${paramRow("Until", `${p}-discharge-until`, "%", v("discharge", "until_pct", ""), { optional: true, max: 100, step: 1 })}
+      </div>
+      <div class="action-params" data-params="use_net"${shown("use_net")}>
+        ${paramRow("Max draw", `${p}-net-max`, "W", v("use_net", "max_wattage", ""), { optional: true })}
+        ${toggle(`${p}-net-solar`, "\u2600 Use Solar", v("use_net", "use_solar", true) !== false)}
+      </div>
+      <div class="action-params" data-params="car_charge"${shown("car_charge")}>
+        ${toggle(`${p}-car-solar`, "\u2600 Use Solar", v("car_charge", "use_solar", true) !== false)}
+        ${paramRow("Grid", `${p}-car-net`, "W", v("car_charge", "use_net_wattage", 0), { min: -1e5, title: "Power the car takes from the grid; 0 = solar only" })}
+        ${paramRow("Battery", `${p}-car-bat`, "W", v("car_charge", "use_battery_wattage", 0), { min: -1e5, title: "+ the car draws from the house battery \xB7 \u2212 the house battery charges too \xB7 0 = left alone" })}
+        ${paramRow("Battery until", `${p}-car-bat-until`, "%", v("car_charge", "use_battery_until_pct", ""), { optional: true, max: 100, step: 1 })}
+      </div>
+      <div class="af-cond" id="${p}-cond"></div>
+    </div>
+  </div>`;
+}
+function wireActionForm(sr, p, action, cfg, kwpW) {
+  const root = sr.getElementById(`${p}-af`);
+  const condEl = sr.getElementById(`${p}-cond`);
+  const input = (id) => sr.getElementById(`${p}-${id}`);
+  const num = (id) => {
+    const raw = input(id)?.value ?? "";
+    const n = parseFloat(raw);
+    return raw === "" || isNaN(n) ? null : n;
+  };
+  const isOn = (id) => sr.getElementById(`${p}-${id}`)?.classList.contains("on") ?? true;
+  let selAction = action;
+  let conds = (cfg.when ?? []).map((c) => ({ ...c }));
+  let otherAction = cfg.otherwise?.action ?? (action === "idle" ? "use_net" : "idle");
+  const storedOther = { action: cfg.otherwise?.action, config: cfg.otherwise?.config ?? {} };
+  const select = (a) => {
+    selAction = a;
+    root.querySelectorAll(".ap-btn[data-action]").forEach((b) => b.classList.toggle("sel", b.dataset.action === a));
+    root.querySelectorAll("[data-params]").forEach((el) => {
+      el.hidden = el.dataset.params !== a;
+    });
+  };
+  const renderConds = () => {
+    const rows = conds.map((c, ci) => {
+      const m = COND_META[c.on];
+      return `<div class="af-cond-row" data-ci="${ci}">
+        <select class="af-select" data-cond-on>
+          ${Object.keys(COND_META).map((k) => `<option value="${k}"${k === c.on ? " selected" : ""}>${COND_META[k].name}</option>`).join("")}
+        </select>
+        <select class="af-select" data-cond-op>
+          <option value="above"${c.op === "above" ? " selected" : ""}>\u2265</option>
+          <option value="below"${c.op === "below" ? " selected" : ""}>\u2264</option>
+        </select>
+        <input class="param-input" data-cond-val type="number" step="${m.step}" value="${c.value}">
+        <span class="param-unit">${m.unit}</span>
+        <button class="af-x" data-cond-del title="Remove condition">\u2715</button>
+      </div>`;
+    }).join("");
+    const other = conds.length ? `<div class="af-other">
+        <span class="af-label">otherwise</span>
+        ${ACTION_DEFS.map((a) => `<button class="af-other-btn${a.key === otherAction ? " sel" : ""}" data-other="${a.key}" style="--btn-c:${buttonColor(a)}">${a.label}</button>`).join("")}
+      </div>` : "";
+    const add = conds.length < MAX_CONDITIONS ? `<button class="af-link" data-cond-add>${conds.length ? "+ and" : "+ Only when\u2026"}</button>` : "";
+    condEl.innerHTML = `${conds.length ? '<div class="af-label">Only when</div>' : ""}${rows}${add}${other}`;
+  };
+  root.querySelectorAll(".ap-btn[data-action]").forEach((btn) => btn.addEventListener("click", () => select(btn.dataset.action)));
+  root.querySelectorAll(".toggle-btn").forEach((btn) => btn.addEventListener("click", () => btn.classList.toggle("on")));
+  condEl.addEventListener("click", (e) => {
+    const t = e.target;
+    const row = t.closest("[data-ci]");
+    if (t.closest("[data-cond-add]")) {
+      conds.push({ on: "soc", op: "above", value: COND_META.soc.def });
+    } else if (t.closest("[data-cond-del]") && row) {
+      conds.splice(+row.dataset.ci, 1);
+    } else if (t.closest("[data-other]")) {
+      otherAction = t.closest("[data-other]").dataset.other;
+    } else {
+      return;
+    }
+    renderConds();
+  });
+  condEl.addEventListener("change", (e) => {
+    const t = e.target;
+    const row = t.closest("[data-ci]");
+    if (!row) return;
+    const c = conds[+row.dataset.ci];
+    if (t.matches("[data-cond-on]")) {
+      c.on = t.value;
+      c.value = COND_META[c.on].def;
+      renderConds();
+    } else if (t.matches("[data-cond-op]")) {
+      c.op = t.value;
+    } else if (t.matches("[data-cond-val]")) {
+      const n = parseFloat(t.value);
+      if (!isNaN(n)) c.value = n;
+    }
+  });
+  renderConds();
+  const read = () => {
+    const f = { action: selAction };
+    if (selAction === "charge" || selAction === "discharge") {
+      f.wattage = num(`${selAction}-w`) ?? kwpW;
+      const until = num(`${selAction}-until`);
+      if (until != null) f.until_pct = until;
+    } else if (selAction === "use_net") {
+      f.use_solar = isOn("net-solar");
+      const max = num("net-max");
+      if (max != null) f.max_wattage = max;
+    } else if (selAction === "car_charge") {
+      f.use_solar = isOn("car-solar");
+      f.use_net_wattage = num("car-net") ?? 0;
+      f.use_battery_wattage = num("car-bat") ?? 0;
+      const until = num("car-bat-until");
+      if (until != null && f.use_battery_wattage !== 0) f.use_battery_until_pct = until;
+    }
+    if (conds.length) {
+      f.when = conds.map((c) => ({ ...c }));
+      f.otherwise = {
+        action: otherAction,
+        ...otherAction === storedOther.action ? storedOther.config : defaultFields(otherAction, kwpW)
+      };
+    }
+    return f;
+  };
+  const load = (f) => {
+    select(f.action);
+    const set = (id, val) => {
+      const el = input(id);
+      if (el) el.value = val != null ? String(val) : "";
+    };
+    const setOn = (id, on) => sr.getElementById(`${p}-${id}`)?.classList.toggle("on", on);
+    if (f.action === "charge" || f.action === "discharge") {
+      set(`${f.action}-w`, f.wattage);
+      set(`${f.action}-until`, f.until_pct);
+    } else if (f.action === "use_net") {
+      set("net-max", f.max_wattage);
+      setOn("net-solar", f.use_solar !== false);
+    } else if (f.action === "car_charge") {
+      setOn("car-solar", f.use_solar !== false);
+      set("car-net", f.use_net_wattage ?? 0);
+      set("car-bat", f.use_battery_wattage ?? 0);
+      set("car-bat-until", f.use_battery_until_pct);
+    }
+    conds = (f.when ?? []).map((c) => ({ ...c }));
+    otherAction = f.otherwise?.action ?? "idle";
+    if (f.otherwise) {
+      const { action: a, ...rest } = f.otherwise;
+      storedOther.action = a;
+      storedOther.config = rest;
+    }
+    renderConds();
+  };
+  return { get action() {
+    return selAction;
+  }, select, read, load };
+}
+
 // src/dashboard/dashboard-graph.ts
 function renderMainChart(sr, slots, config, hass, nowIdx, devColors, onSlotClick) {
   const n = slots.length;
@@ -542,17 +756,13 @@ function renderMainChart(sr, slots, config, hass, nowIdx, devColors, onSlotClick
   });
   sr.getElementById("action-strip").innerHTML = slots.map((slot, i) => {
     const act = slotAction(slot);
-    const hasCar = slotHasCar(slot);
-    let bg;
-    if (act.key === "car_charge") {
-      bg = "#ca8a04";
-    } else if (hasCar) {
-      bg = `linear-gradient(to right, ${act.color} 60%, #ca8a04 60%)`;
-    } else {
-      bg = act.color;
-    }
-    const title = hasCar && act.key !== "car_charge" ? `${act.label} + Car` : act.label;
-    return `<div class="ac" data-i="${i}" style="background:${bg}" title="${title}"></div>`;
+    const hasCar = slotHasCar(slot) || !!slot.car_surplus;
+    const other = slot.action_config?.when?.length ? slot.action_config.otherwise?.action ?? "idle" : null;
+    let bg = other ? `linear-gradient(to bottom, ${act.color} 55%, ${actionColor(other)} 55%)` : act.color;
+    if (hasCar && act.key !== "car_charge") bg = `linear-gradient(to right, transparent 60%, #ca8a04 60%), ${bg}`;
+    let title = slotSummary(act.key, slot.action_config);
+    if (slot.car_surplus && act.key !== "car_charge") title += " \xB7 car on excess solar";
+    return `<div class="ac" data-i="${i}" style="background:${bg}" title="${esc(title)}"></div>`;
   }).join("");
   sr.getElementById("action-strip").querySelectorAll(".ac").forEach((el) => {
     el.addEventListener("click", () => onSlotClick(+el.dataset.i));
@@ -745,15 +955,8 @@ function scrollToSlot(sr, totalSlots, i, instant) {
 
 // src/dashboard/dashboard-dialog.ts
 var _clipboard = null;
-var ACTION_LABELS = {
-  idle: "Idle",
-  charge: "Charge",
-  discharge: "Discharge",
-  use_net: "Use Net",
-  car_charge: "Car Charge"
-};
 function pasteTitle(cb) {
-  return cb ? `Paste & Save (${ACTION_LABELS[cb.action] ?? cb.action}) (Ctrl+V)` : "Paste & Save (Ctrl+V)";
+  return cb ? `Paste & Save (${slotSummary(cb.fields.action, cb.fields)}) (Ctrl+V)` : "Paste & Save (Ctrl+V)";
 }
 var NAV_SHORTCUTS = [
   ["\u2190 \u2192", "slot"],
@@ -799,7 +1002,6 @@ function renderPopup(ctx) {
     const p = slots[idx].price, c = priceColor(p), w = Math.min(100, Math.max(5, p / 52 * 100));
     const score = priceScore(p, allPrices);
     const scoreCol = priceScoreColor(score);
-    const injLine = cur && slots[idx]._injPrice ? `<div class="pt-inj">\u2191 ${slots[idx]._injPrice.toFixed(2)} <span class="pt-unit">ct</span></div>` : "";
     const scoreLine = cur ? `<div class="pt-score" style="color:${scoreCol}">Score: ${score}/10</div>` : "";
     return `<div class="pt-slot${cur ? " cur" : ""}${isNav ? " nav" : ""}${isNow ? " is-now" : ""}"${isNav ? ` data-nav="${idx}"` : ""}
       title="${isNav ? "Click to navigate" : ""}">
@@ -807,196 +1009,62 @@ function renderPopup(ctx) {
       <div class="pt-time">${slotTimeStr(slots[idx])}</div>
       <div class="pt-price" style="color:${c}">${p.toFixed(2)}<span class="pt-unit">ct</span></div>
       ${scoreLine}
-      ${injLine}
       <div class="pt-bar" style="background:${c};width:${w}%"></div>
     </div>${arrow}`;
   }).join("");
-  const devHtml = (slot.devices || []).length ? `<div class="device-list">${slot.devices.map((d) => `
-        <div class="device-item">
-          <div class="device-dot" style="background:${devColors[d.name] || "#3b82f6"}"></div>
-          <div class="device-name">${esc(d.name)}</div>
-          <div class="device-watt">${d.manual_override_w ?? d.allocated_wattage_w} W</div>
-        </div>`).join("")}</div>` : `<div style="font-family:var(--code-font-family, monospace);font-size:10px;color:var(--text-dim);margin-top:4px">No devices scheduled</div>`;
   const curAction = slot.action || (slot.battery_manual_override_w > 0 ? "charge" : slot.battery_manual_override_w < 0 ? "discharge" : "idle");
   const aCfg = slot.action_config || {};
   const kwpW = Math.round((parseFloat(hass?.states[kwpEntityId]?.state) || 3) * 1e3);
-  const editHtml = deviceId || entryId ? (() => {
-    const actions = [
-      { key: "idle", label: "Idle", color: "#374151" },
-      { key: "charge", label: "Charge", color: "#16a34a" },
-      { key: "use_net", label: "Use Net", color: "#2563eb" },
-      { key: "discharge", label: "Discharge", color: "#dc2626" },
-      { key: "car_charge", label: "Car Charge", color: "#ca8a04" }
-    ];
-    const actionBtns = actions.map(
-      (a) => `<button class="ap-btn${curAction === a.key ? " sel" : ""}" data-action="${a.key}" style="--btn-c:${a.color}">
-        <div class="ap-dot" style="background:${a.color}"></div>${a.label}
-      </button>`
-    ).join("");
-    const chargeW = curAction === "charge" ? aCfg.wattage ?? kwpW : kwpW;
-    const dischargeW = curAction === "discharge" ? aCfg.wattage ?? kwpW : kwpW;
-    const netW = curAction === "use_net" ? aCfg.max_wattage ?? kwpW : kwpW;
-    const solarOnUseNet = curAction === "use_net" ? aCfg.use_solar !== false : true;
-    const solarOnCar = curAction === "car_charge" ? aCfg.use_solar !== false : true;
-    const carNetOn = curAction === "car_charge" && (aCfg.use_net_wattage ?? 0) !== 0;
-    const carNetW = curAction === "car_charge" ? aCfg.use_net_wattage ?? kwpW : kwpW;
-    const carBatOn = curAction === "car_charge" && (aCfg.use_battery_wattage ?? 0) !== 0;
-    const carBatW = curAction === "car_charge" ? aCfg.use_battery_wattage ?? kwpW : kwpW;
-    const carBatUntil = curAction === "car_charge" ? aCfg.use_battery_until_pct ?? "" : "";
-    return `<div class="action-section" id="action-section">
-      <div class="action-section-title">Plan Action</div>
-      <div class="action-editor">
-        <div class="ap-grid">${actionBtns}</div>
-        <div class="params-panel">
-          <div class="action-params" id="params-charge" style="${curAction === "charge" ? "" : "display:none"}">
-            <div class="param-row">
-              <span class="param-label">Power</span>
-              <input class="param-input" id="param-charge-w" type="number" min="0" max="100000" step="100" value="${chargeW}">
-              <span class="param-unit">W</span>
-            </div>
-            <div class="param-row">
-              <span class="param-label">Until %<span class="param-optional">opt</span></span>
-              <input class="param-input" id="param-charge-until" type="number" min="0" max="100" step="1" value="${curAction === "charge" ? aCfg.until_pct ?? "" : ""}">
-              <span class="param-unit">%</span>
-            </div>
-          </div>
-          <div class="action-params" id="params-discharge" style="${curAction === "discharge" ? "" : "display:none"}">
-            <div class="param-row">
-              <span class="param-label">Power</span>
-              <input class="param-input" id="param-discharge-w" type="number" min="0" max="100000" step="100" value="${dischargeW}">
-              <span class="param-unit">W</span>
-            </div>
-            <div class="param-row">
-              <span class="param-label">Until %<span class="param-optional">opt</span></span>
-              <input class="param-input" id="param-discharge-until" type="number" min="0" max="100" step="1" value="${curAction === "discharge" ? aCfg.until_pct ?? "" : ""}">
-              <span class="param-unit">%</span>
-            </div>
-          </div>
-          <div class="action-params" id="params-use_net" style="${curAction === "use_net" ? "" : "display:none"}">
-            <div class="param-row">
-              <span class="param-label">Max draw<span class="param-optional">opt</span></span>
-              <input class="param-input" id="param-usenet-max" type="number" min="0" max="100000" step="100" value="${netW}">
-              <span class="param-unit">W</span>
-            </div>
-            <button class="toggle-btn${solarOnUseNet ? " on" : ""}" id="param-usenet-solar" style="--tc:#f59e0b">
-              <div class="toggle-btn-dot"></div>\u2600 Use Solar
-            </button>
-          </div>
-          <div class="action-params" id="params-car_charge" style="${curAction === "car_charge" ? "" : "display:none"}">
-            <button class="toggle-btn${solarOnCar ? " on" : ""}" id="param-car-solar" style="--tc:#f59e0b">
-              <div class="toggle-btn-dot"></div>\u2600 Use Solar
-            </button>
-            <div class="watt-card${carNetOn ? " on" : ""}" id="wc-car-net" style="--wc-c:#2563eb">
-              <div class="watt-card-header">
-                <div class="watt-card-dot"></div>
-                <span class="watt-card-label">Net Grid</span>
-              </div>
-              <div class="watt-card-input-wrap">
-                <div class="watt-card-row">
-                  <span class="watt-card-sub-label">Wattage</span>
-                  <input class="param-input" id="param-car-net-w" type="number" min="-100000" max="100000" step="100" value="${carNetW}">
-                  <span class="param-unit">W</span>
-                </div>
-              </div>
-            </div>
-            <div class="watt-card${carBatOn ? " on" : ""}" id="wc-car-bat" style="--wc-c:#7c3aed">
-              <div class="watt-card-header">
-                <div class="watt-card-dot"></div>
-                <span class="watt-card-label">Battery</span>
-              </div>
-              <div class="watt-card-input-wrap">
-                <div class="watt-card-row">
-                  <span class="watt-card-sub-label">Budget</span>
-                  <input class="param-input" id="param-car-bat-w" type="number" min="-100000" max="100000" step="100" value="${carBatW}">
-                  <span class="param-unit">W</span>
-                </div>
-                <div class="watt-card-hint">+ car draws from the battery &nbsp;\xB7&nbsp; \u2212 charges the battery too</div>
-                <div class="watt-card-row">
-                  <span class="watt-card-sub-label">Until %<span class="param-optional">opt</span></span>
-                  <input class="param-input" id="param-car-bat-until" type="number" min="0" max="100" step="1" value="${carBatUntil}">
-                  <span class="param-unit">%</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="action-locked-row">
-        <input type="checkbox" id="action-locked" checked>
-        <span class="action-locked-label">Lock (keep the optimizer off this slot)</span>
-      </div>
-      <div class="action-btn-row">
-        <button class="action-apply-btn" id="action-apply" title="Apply (Ctrl+S)">Apply</button>
-        <button class="action-copy-btn" id="action-copy" title="Copy slot config (Ctrl+C)"><ha-icon icon="mdi:content-copy"></ha-icon></button>
-        <button class="action-paste-btn" id="action-paste" ${_clipboard ? "" : "disabled"} title="${pasteTitle(_clipboard)}"><ha-icon icon="mdi:content-paste"></ha-icon></button>
-      </div>
-    </div>`;
-  })() : `<div style="padding:0 16px 16px">
-    <div class="edit-hint">
+  const canEdit = !!(deviceId || entryId);
+  const showEditor = canEdit && config.layout?.show_actions !== false;
+  const editHtml = showEditor ? `<div class="action-section" id="action-section">
+      ${actionFormHtml("sd", curAction, aCfg, kwpW)}
+    </div>` : canEdit ? "" : `<div class="edit-hint">
       \u{1F4A1} To enable slot editing, configure <strong style="color:var(--text-bright)">integration.device_id</strong>
       (or legacy <strong style="color:var(--text-bright)">integration.entry_id</strong>)
       in your card config. Find it in Settings \u2192 Devices &amp; Services \u2192 EMS \u2192 (\u22EE) \u2192 Information.
-    </div>
-  </div>`;
+    </div>`;
+  const chips = [
+    slot.battery_prediction != null ? ["Predicted battery", `\u{1F50B} ${slot.battery_prediction.toFixed(0)} %`, ""] : null,
+    slot.solar_w != null ? ["Predicted solar", `\u2600 ${Math.round(slot.solar_w)} W`, "#eab308"] : null,
+    slot.load_w != null ? ["Predicted house load", `\u2302 ${Math.round(slot.load_w)} W`, "#a855f7"] : null,
+    slot._injPrice ? ["Injection price", `\u2191 ${slot._injPrice.toFixed(2)} ct`, ""] : null,
+    slot.car_surplus ? ["The car is expected to charge on excess solar", "\u2600\u{1F697} surplus", "#ca8a04"] : null,
+    slot.locked ? ["Locked: the optimizer leaves this slot alone", "\u{1F512}", ""] : null
+  ].filter(Boolean);
+  const chipsHtml = chips.length ? `<div class="pop-chips">${chips.map(([title, text, color]) => `<span class="pop-chip" title="${title}"${color ? ` style="color:${color}"` : ""}>${text}</span>`).join("")}</div>` : "";
   sr.getElementById("popup").innerHTML = `
     <div class="ph">
-      <div class="ph-nav">
-        <button class="ph-nav-btn" id="pop-prev" title="Previous slot (\u2190)" ${i === 0 ? "disabled" : ""}>\u2039</button>
-        <div>
-          <div class="ph-title">Slot Details</div>
-          <div class="ph-time">${slotTimeStr(slot)} \u2013 ${slotEndTimeStr(slots, i)}</div>
-        </div>
-        <button class="ph-nav-btn" id="pop-next" title="Next slot (\u2192)" ${i === n - 1 ? "disabled" : ""}>\u203A</button>
+      <button class="ph-nav-btn" id="pop-prev" title="Previous slot (\u2190)" ${i === 0 ? "disabled" : ""}>\u2039</button>
+      <div class="ph-mid">
+        <div class="ph-time">${slotTimeStr(slot)} \u2013 ${slotEndTimeStr(slots, i)}</div>
+        <div class="ph-sum" style="color:${act.key === "idle" ? "var(--text-dim)" : act.color}">${esc(slotSummary(curAction, aCfg))}</div>
       </div>
+      <button class="ph-nav-btn" id="pop-next" title="Next slot (\u2192)" ${i === n - 1 ? "disabled" : ""}>\u203A</button>
       <div class="ph-actions">
-        ${deviceId || entryId ? `<button class="ph-bulk-btn" id="pop-plan" title="Schedule the car or set a battery goal (P)"><ha-icon icon="mdi:calendar-clock"></ha-icon></button>` : ""}
-        ${deviceId || entryId ? `<button class="ph-bulk-btn" id="pop-bulk" title="Bulk edit slots (B)">\u229E</button>` : ""}
+        ${canEdit ? `<button class="ph-bulk-btn" id="pop-plan" title="Schedule the car or set a battery goal (P)"><ha-icon icon="mdi:calendar-clock"></ha-icon></button>` : ""}
+        ${canEdit ? `<button class="ph-bulk-btn" id="pop-bulk" title="Bulk edit slots (B)">\u229E</button>` : ""}
         <button class="ph-close" id="pop-close" title="Close (Esc)">\u2715</button>
       </div>
     </div>
 
-    <div class="pop-nav-wrap">
-      <div class="pop-nav-head">
-        <div class="pop-nav-label">Jump to slot</div>
+    <div class="pop-body">
+      <div class="pop-nav-wrap">
         ${ctx.days.length > 1 ? `<div class="pop-day-btns">${ctx.days.map(
     (d, di) => `<button class="pop-day-btn${d.active ? " active" : ""}" data-day="${di}">${esc(d.label)}</button>`
   ).join("")}</div>` : ""}
+        <div class="pop-nav-track" id="pop-nav-track" title="Jump to slot">
+          <div class="pop-nav-segs">${navSegs}</div>
+          <div class="pop-nav-dots">${navDots}</div>
+          <div class="pop-nav-cursor" style="left:${(i + 0.5) / n * 100}%"></div>
+          <div class="pop-nav-now"    style="left:${ns >= 0 ? (ns + 0.5) / n * 100 : 50}%;${ns < 0 ? "display:none" : ""}"></div>
+        </div>
       </div>
-      <div class="pop-nav-track" id="pop-nav-track">
-        <div class="pop-nav-segs">${navSegs}</div>
-        <div class="pop-nav-dots">${navDots}</div>
-        <div class="pop-nav-cursor" style="left:${(i + 0.5) / n * 100}%"></div>
-        <div class="pop-nav-now"    style="left:${ns >= 0 ? (ns + 0.5) / n * 100 : 50}%;${ns < 0 ? "display:none" : ""}"></div>
-      </div>
-    </div>
 
-    <div class="price-trio">${trioHtml}</div>
-
-    <div class="pop-detail">
-      ${slot._injPrice ? `<div class="pop-row">
-        <span class="pop-row-label">Injection</span>
-        <span class="pop-row-value" style="color:var(--text-dim)">\u2191 ${slot._injPrice.toFixed(2)} ct</span>
-      </div>` : ""}
-      ${slot.battery_prediction != null ? `<div class="pop-row">
-        <span class="pop-row-label">Predicted Battery</span>
-        <span class="pop-row-value">${slot.battery_prediction.toFixed(1)} %</span>
-      </div>` : ""}
-      ${slot.solar_w != null ? `<div class="pop-row">
-        <span class="pop-row-label">Predicted Solar</span>
-        <span class="pop-row-value" style="color:#eab308">\u2600 ${Math.round(slot.solar_w)} W</span>
-      </div>` : ""}
-      ${slot.load_w != null ? `<div class="pop-row">
-        <span class="pop-row-label">Predicted Usage</span>
-        <span class="pop-row-value" style="color:#a855f7">${Math.round(slot.load_w)} W</span>
-      </div>` : ""}
-      ${slot.locked ? `<div class="pop-row">
-        <span class="pop-row-label">Locked</span>
-        <span class="pop-row-value">\u{1F512} Yes</span>
-      </div>` : ""}
-    </div>
-
-    ${config.layout?.show_actions !== false ? editHtml : ""}
-    ${(deviceId || entryId) && devicesAvailable.length > 0 ? (() => {
+      <div class="price-trio">${trioHtml}</div>
+      ${chipsHtml}
+      ${editHtml}
+      ${canEdit && devicesAvailable.length > 0 ? (() => {
     const slotDevices = slot.devices || [];
     const devToggles = devicesAvailable.map((d, di) => {
       const existing = slotDevices.find((sd) => sd.name === d.name);
@@ -1006,25 +1074,35 @@ function renderPopup(ctx) {
         const modes = d.modes || [];
         const sel = existing?.mode ?? modes[0];
         control = `<select class="dev-toggle-select" data-dev-sched-mode="${di}">
-            ${modes.map((m) => `<option value="${esc(m)}"${m === sel ? " selected" : ""}>${esc(m)}</option>`).join("")}
-          </select>`;
+              ${modes.map((m) => `<option value="${esc(m)}"${m === sel ? " selected" : ""}>${esc(m)}</option>`).join("")}
+            </select>`;
       } else if (d.control !== "switch") {
         const watt = existing?.manual_override_w ?? existing?.allocated_wattage_w ?? d.default_wattage;
         control = `<input class="dev-toggle-input" data-dev-sched-input="${di}" type="number" min="0" max="100000" step="100" value="${watt}">
-            <span class="dev-toggle-unit">W</span>`;
+              <span class="dev-toggle-unit">W</span>`;
       }
       return `<div class="dev-toggle-card${isOn ? " on" : ""}" data-dev-sched="${di}">
-          <div class="dev-toggle-dot" style="background:${devColors[d.name] || "#3b82f6"}"></div>
-          <span class="dev-toggle-name">${esc(d.name)}</span>
-          ${control}
-        </div>`;
+            <div class="dev-toggle-dot" style="background:${devColors[d.name] || "#3b82f6"}"></div>
+            <span class="dev-toggle-name">${esc(d.name)}</span>
+            ${control}
+          </div>`;
     }).join("");
     return `<div class="dev-toggle-section">
-        <div class="dev-toggle-title">Schedule Devices</div>
-        <div class="dev-toggle-list">${devToggles}</div>
-      </div>`;
+          <div class="dev-toggle-title">Devices</div>
+          <div class="dev-toggle-list">${devToggles}</div>
+        </div>`;
   })() : ""}
-    <div class="pop-keys">${[...NAV_SHORTCUTS, ...deviceId || entryId ? EDIT_SHORTCUTS : []].map(([k, label]) => `<span><kbd>${k}</kbd> ${label}</span>`).join("")}</div>`;
+      <div class="pop-keys">${[...NAV_SHORTCUTS, ...canEdit ? EDIT_SHORTCUTS : []].map(([k, label]) => `<span><kbd>${k}</kbd> ${label}</span>`).join("")}</div>
+    </div>
+
+    ${showEditor ? `<div class="pop-foot">
+      <label class="pop-lock" title="Keep the optimizer off this slot (L)">
+        <input type="checkbox" id="action-locked" checked>\u{1F512} Lock
+      </label>
+      <button class="action-copy-btn" id="action-copy" title="Copy slot config (Ctrl+C)"><ha-icon icon="mdi:content-copy"></ha-icon></button>
+      <button class="action-paste-btn" id="action-paste" ${_clipboard ? "" : "disabled"} title="${esc(pasteTitle(_clipboard))}"><ha-icon icon="mdi:content-paste"></ha-icon></button>
+      <button class="action-apply-btn" id="action-apply" title="Apply (Ctrl+S)">Apply</button>
+    </div>` : ""}`;
   sr.getElementById("pop-close").addEventListener("click", () => ctx.onClose());
   sr.getElementById("pop-bulk")?.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -1060,243 +1138,48 @@ function renderPopup(ctx) {
       ctx.onNavigate(+el.dataset.nav);
     });
   });
-  if (deviceId || entryId) {
-    let selAction = curAction;
-    const showParams = (action) => {
-      ["charge", "discharge", "use_net", "car_charge"].forEach((a) => {
-        const el = sr.getElementById(`params-${a}`);
-        if (el) el.style.display = a === action ? "" : "none";
+  if (canEdit) {
+    const form = showEditor ? wireActionForm(sr, "sd", curAction, aCfg, kwpW) : null;
+    const slotTime = slot.start ?? slot.time;
+    const save = (fields, locked, btn, label) => {
+      hass.callService("ha_ems", "planning_bulk", {
+        device_id: deviceId || entryId,
+        slots: [{ time: slotTime, locked, ...fields }]
+      }).then(() => {
+        if (label) btn.textContent = "\u2713 Applied";
+        btn.classList.add("success");
+        setTimeout(() => {
+          if (label) btn.textContent = label;
+          btn.classList.remove("success");
+        }, 2e3);
+      }).catch((err) => {
+        if (label) btn.textContent = "\u2715 Error";
+        btn.classList.add("error");
+        console.error("EMS card error:", err);
       });
     };
-    sr.querySelectorAll(".ap-btn[data-action]").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        selAction = btn.dataset.action;
-        sr.querySelectorAll(".ap-btn[data-action]").forEach((b) => b.classList.toggle("sel", b === btn));
-        showParams(selAction);
-      });
-    });
-    sr.querySelectorAll(".param-input, #action-locked").forEach((el) => {
-      el.addEventListener("click", (e) => e.stopPropagation());
-    });
-    const solarToggleIds = ["param-usenet-solar", "param-car-solar"];
-    solarToggleIds.forEach((id) => {
-      const btn = sr.getElementById(id);
-      if (btn) btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        btn.classList.toggle("on");
-      });
-    });
-    ["wc-car-net", "wc-car-bat"].forEach((id) => {
-      const card = sr.getElementById(id);
-      if (!card) return;
-      card.addEventListener("click", (e) => {
-        e.stopPropagation();
-        if (e.target.tagName === "INPUT") return;
-        card.classList.toggle("on");
-      });
-      card.querySelectorAll("input").forEach((inp) => inp.addEventListener("click", (e) => e.stopPropagation()));
-    });
+    const lockedChk = () => sr.getElementById("action-locked");
     sr.getElementById("action-apply")?.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const lockedValue = sr.getElementById("action-locked")?.checked ?? false;
-      const slotTime = slot.start ?? slot.time;
-      const commonData = { device_id: deviceId || entryId, time: slotTime, locked: lockedValue };
-      let svcPromise;
-      if (selAction === "idle") {
-        svcPromise = hass.callService("ha_ems", "planning_idle", commonData);
-      } else if (selAction === "charge") {
-        const watts = (() => {
-          const v = parseFloat(sr.getElementById("param-charge-w")?.value);
-          return isNaN(v) ? kwpW : v;
-        })();
-        const untilRaw = sr.getElementById("param-charge-until")?.value;
-        const untilPct = untilRaw ? parseFloat(untilRaw) : null;
-        svcPromise = hass.callService(
-          "ha_ems",
-          "planning_charge",
-          { ...commonData, wattage: watts, ...untilPct != null ? { until_pct: untilPct } : {} }
-        );
-      } else if (selAction === "discharge") {
-        const watts = (() => {
-          const v = parseFloat(sr.getElementById("param-discharge-w")?.value);
-          return isNaN(v) ? kwpW : v;
-        })();
-        const untilRaw = sr.getElementById("param-discharge-until")?.value;
-        const untilPct = untilRaw ? parseFloat(untilRaw) : null;
-        svcPromise = hass.callService(
-          "ha_ems",
-          "planning_discharge",
-          { ...commonData, wattage: watts, ...untilPct != null ? { until_pct: untilPct } : {} }
-        );
-      } else if (selAction === "use_net") {
-        const maxRaw = sr.getElementById("param-usenet-max")?.value;
-        const maxWatts = maxRaw !== "" ? parseFloat(maxRaw) : null;
-        const useSolar = sr.getElementById("param-usenet-solar")?.classList.contains("on") ?? true;
-        svcPromise = hass.callService(
-          "ha_ems",
-          "planning_use_net",
-          { ...commonData, use_solar: useSolar, ...maxWatts != null ? { max_wattage: maxWatts } : {} }
-        );
-      } else if (selAction === "car_charge") {
-        const useSolar = sr.getElementById("param-car-solar")?.classList.contains("on") ?? true;
-        const netCardOn = sr.getElementById("wc-car-net")?.classList.contains("on") ?? false;
-        const batCardOn = sr.getElementById("wc-car-bat")?.classList.contains("on") ?? false;
-        const netW2 = netCardOn ? (() => {
-          const v = parseFloat(sr.getElementById("param-car-net-w")?.value);
-          return isNaN(v) ? 0 : v;
-        })() : 0;
-        const batW2 = batCardOn ? (() => {
-          const v = parseFloat(sr.getElementById("param-car-bat-w")?.value);
-          return isNaN(v) ? 0 : v;
-        })() : 0;
-        const batUntilR = sr.getElementById("param-car-bat-until")?.value;
-        const batUntil = batCardOn && batUntilR ? parseFloat(batUntilR) : null;
-        svcPromise = hass.callService("ha_ems", "planning_car_charge_slot", {
-          ...commonData,
-          use_solar: useSolar,
-          use_net_wattage: netW2,
-          use_battery_wattage: batW2,
-          ...batUntil != null ? { use_battery_until_pct: batUntil } : {}
-        });
-      }
-      const applyBtn = sr.getElementById("action-apply");
-      if (svcPromise) {
-        svcPromise.then(() => {
-          if (applyBtn) {
-            applyBtn.textContent = "\u2713 Applied";
-            applyBtn.classList.add("success");
-          }
-          setTimeout(() => {
-            if (applyBtn) {
-              applyBtn.textContent = "Apply";
-              applyBtn.classList.remove("success");
-            }
-          }, 2e3);
-        }).catch((err) => {
-          if (applyBtn) {
-            applyBtn.textContent = "\u2715 Error";
-            applyBtn.classList.add("error");
-            console.error("EMS card error:", err);
-          }
-        });
-      }
+      if (form) save(form.read(), lockedChk()?.checked ?? false, e.currentTarget, "Apply");
     });
     sr.getElementById("action-copy")?.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const numVal = (id, fallback) => {
-        const v = parseFloat(sr.getElementById(id)?.value);
-        return isNaN(v) ? fallback : v;
-      };
-      const optNumVal = (id) => {
-        const v = sr.getElementById(id)?.value;
-        return v !== "" ? parseFloat(v) : null;
-      };
-      _clipboard = {
-        action: selAction,
-        locked: sr.getElementById("action-locked")?.checked ?? false,
-        chargeW: numVal("param-charge-w", kwpW),
-        chargeUntilPct: optNumVal("param-charge-until"),
-        dischargeW: numVal("param-discharge-w", kwpW),
-        dischargeUntilPct: optNumVal("param-discharge-until"),
-        netMaxW: optNumVal("param-usenet-max"),
-        netUseSolar: sr.getElementById("param-usenet-solar")?.classList.contains("on") ?? true,
-        carUseSolar: sr.getElementById("param-car-solar")?.classList.contains("on") ?? true,
-        carNetOn: sr.getElementById("wc-car-net")?.classList.contains("on") ?? false,
-        carNetW: numVal("param-car-net-w", kwpW),
-        carBatOn: sr.getElementById("wc-car-bat")?.classList.contains("on") ?? false,
-        carBatW: numVal("param-car-bat-w", kwpW),
-        carBatUntilPct: optNumVal("param-car-bat-until")
-      };
+      if (!form) return;
+      _clipboard = { fields: form.read(), locked: lockedChk()?.checked ?? false };
       const pasteBtn = sr.getElementById("action-paste");
       if (pasteBtn) {
         pasteBtn.removeAttribute("disabled");
         pasteBtn.title = pasteTitle(_clipboard);
       }
-      const copyBtn = sr.getElementById("action-copy");
-      if (copyBtn) {
-        copyBtn.classList.add("success");
-        setTimeout(() => copyBtn.classList.remove("success"), 1500);
-      }
+      const copyBtn = e.currentTarget;
+      copyBtn.classList.add("success");
+      setTimeout(() => copyBtn.classList.remove("success"), 1500);
     });
     sr.getElementById("action-paste")?.addEventListener("click", (e) => {
-      e.stopPropagation();
-      if (!_clipboard) return;
-      const cb = _clipboard;
-      selAction = cb.action;
-      sr.querySelectorAll(".ap-btn[data-action]").forEach(
-        (b) => b.classList.toggle("sel", b.dataset.action === selAction)
-      );
-      showParams(selAction);
-      const setVal = (id, val) => {
-        const el = sr.getElementById(id);
-        if (el) el.value = val != null ? String(val) : "";
-      };
-      const setToggle = (id, on) => {
-        sr.getElementById(id)?.classList.toggle("on", on);
-      };
-      setVal("param-charge-w", cb.chargeW);
-      setVal("param-charge-until", cb.chargeUntilPct);
-      setVal("param-discharge-w", cb.dischargeW);
-      setVal("param-discharge-until", cb.dischargeUntilPct);
-      setVal("param-usenet-max", cb.netMaxW);
-      setToggle("param-usenet-solar", cb.netUseSolar);
-      setToggle("param-car-solar", cb.carUseSolar);
-      setToggle("wc-car-net", cb.carNetOn);
-      setVal("param-car-net-w", cb.carNetW);
-      setToggle("wc-car-bat", cb.carBatOn);
-      setVal("param-car-bat-w", cb.carBatW);
-      setVal("param-car-bat-until", cb.carBatUntilPct);
-      const lockedChk = sr.getElementById("action-locked");
-      if (lockedChk) lockedChk.checked = cb.locked;
-      const slotTime = slot.start ?? slot.time;
-      const commonData = { device_id: deviceId || entryId, time: slotTime, locked: cb.locked };
-      let svcPromise2;
-      if (cb.action === "idle") {
-        svcPromise2 = hass.callService("ha_ems", "planning_idle", commonData);
-      } else if (cb.action === "charge") {
-        svcPromise2 = hass.callService(
-          "ha_ems",
-          "planning_charge",
-          { ...commonData, wattage: cb.chargeW, ...cb.chargeUntilPct != null ? { until_pct: cb.chargeUntilPct } : {} }
-        );
-      } else if (cb.action === "discharge") {
-        svcPromise2 = hass.callService(
-          "ha_ems",
-          "planning_discharge",
-          { ...commonData, wattage: cb.dischargeW, ...cb.dischargeUntilPct != null ? { until_pct: cb.dischargeUntilPct } : {} }
-        );
-      } else if (cb.action === "use_net") {
-        svcPromise2 = hass.callService(
-          "ha_ems",
-          "planning_use_net",
-          { ...commonData, use_solar: cb.netUseSolar, ...cb.netMaxW != null ? { max_wattage: cb.netMaxW } : {} }
-        );
-      } else if (cb.action === "car_charge") {
-        svcPromise2 = hass.callService("ha_ems", "planning_car_charge_slot", {
-          ...commonData,
-          use_solar: cb.carUseSolar,
-          use_net_wattage: cb.carNetOn ? cb.carNetW : 0,
-          use_battery_wattage: cb.carBatOn ? cb.carBatW : 0,
-          ...cb.carBatOn && cb.carBatUntilPct != null ? { use_battery_until_pct: cb.carBatUntilPct } : {}
-        });
-      }
-      const pasteBtn2 = sr.getElementById("action-paste");
-      if (svcPromise2) {
-        svcPromise2.then(() => {
-          if (pasteBtn2) {
-            pasteBtn2.classList.add("success");
-          }
-          setTimeout(() => {
-            if (pasteBtn2) pasteBtn2.classList.remove("success");
-          }, 2e3);
-        }).catch((err) => {
-          if (pasteBtn2) {
-            pasteBtn2.classList.add("error");
-            console.error("EMS card error:", err);
-          }
-        });
-      }
+      if (!form || !_clipboard) return;
+      form.load(_clipboard.fields);
+      const chk = lockedChk();
+      if (chk) chk.checked = _clipboard.locked;
+      save(_clipboard.fields, _clipboard.locked, e.currentTarget);
     });
     const devSlotTime = slot.start ?? slot.time;
     const deviceParams = (di) => {
@@ -1383,8 +1266,8 @@ function renderBulkEdit(ctx) {
   let rangeTo = n - 1;
   let filterMode = "all";
   let threshold = Math.round((Math.min(...prices) + Math.max(...prices)) / 2 * 10) / 10;
-  let selAction = "idle";
   let isDraggingRange = false;
+  let dragAnchor = 0;
   let isDraggingThreshold = false;
   const deviceIntents = {};
   const deviceWattage = {};
@@ -1414,10 +1297,16 @@ function renderBulkEdit(ctx) {
     const leftPct = (rangeFrom / n * 100).toFixed(2);
     const widthPct = ((rangeTo - rangeFrom + 1) / n * 100).toFixed(2);
     const highlightHtml = `<div class="be-range-highlight" style="left:${leftPct}%;width:${widthPct}%"></div>`;
-    const thresholdHtml = filterMode !== "all" ? `<div class="be-threshold-line" id="be-threshold-line" style="bottom:${(threshold / maxP * 100).toFixed(1)}%">
-          <span class="be-threshold-label">${threshold.toFixed(1)} ct</span>
+    const thresholdHtml = filterMode !== "all" ? `<div class="be-threshold-line" id="be-threshold-line" style="bottom:${(Math.min(threshold, maxP) / maxP * 100).toFixed(1)}%">
+          <span class="be-threshold-handle" title="Drag to change the price">${threshold.toFixed(1)} ct</span>
         </div>` : "";
     sr.getElementById("be-mini-chart").innerHTML = `<div class="be-mini-bars">${barsHtml}</div>${highlightHtml}${thresholdHtml}`;
+    sr.getElementById("be-mini-dots").innerHTML = slots.map((slot, i) => {
+      const a = slotAction(slot);
+      if (a.key === "idle") return "";
+      const dimmed = i < rangeFrom || i > rangeTo ? " dimmed" : "";
+      return `<div class="be-mini-dot${dimmed}" style="left:${((i + 0.5) / n * 100).toFixed(2)}%;background:${a.color}"></div>`;
+    }).join("");
     sr.getElementById("be-from").value = slotTimeStr(slots[rangeFrom]);
     sr.getElementById("be-to").value = slotTimeStr(slots[rangeTo]);
     sr.getElementById("be-range-count").textContent = `${rangeTo - rangeFrom + 1} slots selected`;
@@ -1438,18 +1327,6 @@ function renderBulkEdit(ctx) {
       if (btn) btn.disabled = matched.length === 0;
     }
   }
-  const actions = [
-    { key: "idle", label: "Idle", color: "#374151" },
-    { key: "charge", label: "Charge", color: "#16a34a" },
-    { key: "use_net", label: "Use Net", color: "#2563eb" },
-    { key: "discharge", label: "Discharge", color: "#dc2626" },
-    { key: "car_charge", label: "Car Charge", color: "#ca8a04" }
-  ];
-  const actionBtns = actions.map(
-    (a) => `<button class="ap-btn${selAction === a.key ? " sel" : ""}" data-action="${a.key}" style="--btn-c:${a.color}">
-      <div class="ap-dot" style="background:${a.color}"></div>${a.label}
-    </button>`
-  ).join("");
   const devicesHtml = devicesAvailable.length > 0 ? `
     <div class="dev-toggle-section">
       <div class="dev-toggle-title">Devices</div>
@@ -1486,6 +1363,7 @@ function renderBulkEdit(ctx) {
     <div class="be-range-section">
       <div class="be-section-label">Select Time Range</div>
       <div class="be-mini-chart" id="be-mini-chart"></div>
+      <div class="be-mini-dots" id="be-mini-dots"></div>
       <div class="be-time-row">
         <div class="be-time-field">
           <span class="be-time-label">From</span>
@@ -1516,98 +1394,20 @@ function renderBulkEdit(ctx) {
       <div class="be-preview-strip" id="be-preview-strip"></div>
     </div>
 
-    <div class="be-action-section">
+    <div class="be-action-section action-section">
       <div class="be-section-label">Action</div>
-      <div class="action-editor">
-        <div class="ap-grid">${actionBtns}</div>
-        <div class="params-panel">
-          <div class="action-params" id="be-params-charge" style="${selAction === "charge" ? "" : "display:none"}">
-            <div class="param-row">
-              <span class="param-label">Power</span>
-              <input class="param-input" id="be-charge-w" type="number" min="0" max="100000" step="100" value="${kwpW}">
-              <span class="param-unit">W</span>
-            </div>
-            <div class="param-row">
-              <span class="param-label">Until %<span class="param-optional">opt</span></span>
-              <input class="param-input" id="be-charge-until" type="number" min="0" max="100" step="1" value="">
-              <span class="param-unit">%</span>
-            </div>
-          </div>
-          <div class="action-params" id="be-params-discharge" style="${selAction === "discharge" ? "" : "display:none"}">
-            <div class="param-row">
-              <span class="param-label">Power</span>
-              <input class="param-input" id="be-discharge-w" type="number" min="0" max="100000" step="100" value="${kwpW}">
-              <span class="param-unit">W</span>
-            </div>
-            <div class="param-row">
-              <span class="param-label">Until %<span class="param-optional">opt</span></span>
-              <input class="param-input" id="be-discharge-until" type="number" min="0" max="100" step="1" value="">
-              <span class="param-unit">%</span>
-            </div>
-          </div>
-          <div class="action-params" id="be-params-use_net" style="${selAction === "use_net" ? "" : "display:none"}">
-            <div class="param-row">
-              <span class="param-label">Max draw<span class="param-optional">opt</span></span>
-              <input class="param-input" id="be-usenet-max" type="number" min="0" max="100000" step="100" value="${kwpW}">
-              <span class="param-unit">W</span>
-            </div>
-            <button class="toggle-btn on" id="be-usenet-solar" style="--tc:#f59e0b">
-              <div class="toggle-btn-dot"></div>\u2600 Use Solar
-            </button>
-          </div>
-          <div class="action-params" id="be-params-car_charge" style="${selAction === "car_charge" ? "" : "display:none"}">
-            <button class="toggle-btn on" id="be-car-solar" style="--tc:#f59e0b">
-              <div class="toggle-btn-dot"></div>\u2600 Use Solar
-            </button>
-            <div class="watt-card" id="be-wc-car-net" style="--wc-c:#2563eb">
-              <div class="watt-card-header">
-                <div class="watt-card-dot"></div>
-                <span class="watt-card-label">Net Grid</span>
-              </div>
-              <div class="watt-card-input-wrap">
-                <div class="watt-card-row">
-                  <span class="watt-card-sub-label">Wattage</span>
-                  <input class="param-input" id="be-car-net-w" type="number" min="0" max="100000" step="100" value="${kwpW}">
-                  <span class="param-unit">W</span>
-                </div>
-              </div>
-            </div>
-            <div class="watt-card" id="be-wc-car-bat" style="--wc-c:#7c3aed">
-              <div class="watt-card-header">
-                <div class="watt-card-dot"></div>
-                <span class="watt-card-label">Battery</span>
-              </div>
-              <div class="watt-card-input-wrap">
-                <div class="watt-card-row">
-                  <span class="watt-card-sub-label">Budget</span>
-                  <input class="param-input" id="be-car-bat-w" type="number" min="-100000" max="100000" step="100" value="${kwpW}">
-                  <span class="param-unit">W</span>
-                </div>
-                <div class="watt-card-hint">+ car draws from the battery &nbsp;\xB7&nbsp; \u2212 charges the battery too</div>
-                <div class="watt-card-row">
-                  <span class="watt-card-sub-label">Until %<span class="param-optional">opt</span></span>
-                  <input class="param-input" id="be-car-bat-until" type="number" min="0" max="100" step="1" value="">
-                  <span class="param-unit">%</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      ${actionFormHtml("be", "idle", {}, kwpW)}
     </div>
 
     ${devicesHtml}
 
-    <div class="action-locked-row be-locked-row">
-      <input type="checkbox" id="be-locked" checked>
-      <span class="action-locked-label">Lock edited slots (keep the optimizer off them)</span>
-    </div>
-    <div class="be-apply-row">
+    <div class="pop-foot be-foot">
+      <label class="pop-lock" title="Keep the optimizer off the edited slots">
+        <input type="checkbox" id="be-locked" checked>\u{1F512} Lock
+      </label>
+      <button class="be-lock-btn" id="be-lock" title="Lock the matched slots without changing them">\u{1F512}</button>
+      <button class="be-lock-btn" id="be-unlock" title="Unlock the matched slots so the optimizer may re-plan them">\u{1F513}</button>
       <button class="be-apply-btn" id="be-apply"></button>
-    </div>
-    <div class="be-apply-row be-lock-row">
-      <button class="be-lock-btn" id="be-lock" title="Lock the matched slots without changing them">\u{1F512} Lock</button>
-      <button class="be-lock-btn" id="be-unlock" title="Unlock the matched slots so the optimizer may re-plan them">\u{1F513} Unlock</button>
     </div>
   `;
   sr.getElementById("be-close").addEventListener("click", () => ctx.onClose());
@@ -1620,17 +1420,14 @@ function renderBulkEdit(ctx) {
   };
   const beginRange = (clientX) => {
     isDraggingRange = true;
-    rangeFrom = idxAtClientX(clientX);
-    rangeTo = rangeFrom;
+    dragAnchor = idxAtClientX(clientX);
+    rangeFrom = rangeTo = dragAnchor;
     renderRangeUI();
   };
   const extendRange = (clientX) => {
-    const clamped = idxAtClientX(clientX);
-    if (clamped >= rangeFrom) rangeTo = clamped;
-    else {
-      rangeTo = rangeFrom;
-      rangeFrom = clamped;
-    }
+    const idx = idxAtClientX(clientX);
+    rangeFrom = Math.min(dragAnchor, idx);
+    rangeTo = Math.max(dragAnchor, idx);
     renderRangeUI();
   };
   const updateThreshold = (clientY) => {
@@ -1702,34 +1499,7 @@ function renderBulkEdit(ctx) {
     threshold = parseFloat(threshInput.value) || 0;
     renderRangeUI();
   });
-  sr.querySelectorAll(".be-action-section .ap-btn[data-action]").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      selAction = btn.dataset.action;
-      sr.querySelectorAll(".be-action-section .ap-btn[data-action]").forEach((b) => b.classList.toggle("sel", b === btn));
-      ["charge", "discharge", "use_net", "car_charge"].forEach((a) => {
-        const el = sr.getElementById(`be-params-${a}`);
-        if (el) el.style.display = a === selAction ? "" : "none";
-      });
-    });
-  });
-  ["be-usenet-solar", "be-car-solar"].forEach((id) => {
-    const btn = sr.getElementById(id);
-    if (btn) btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      btn.classList.toggle("on");
-    });
-  });
-  ["be-wc-car-net", "be-wc-car-bat"].forEach((id) => {
-    const card = sr.getElementById(id);
-    if (!card) return;
-    card.addEventListener("click", (e) => {
-      e.stopPropagation();
-      if (e.target.tagName === "INPUT") return;
-      card.classList.toggle("on");
-    });
-    card.querySelectorAll("input").forEach((inp) => inp.addEventListener("click", (e) => e.stopPropagation()));
-  });
+  const form = wireActionForm(sr, "be", "idle", {}, kwpW);
   sr.querySelectorAll(".dev-toggle-card[data-dev]").forEach((card) => {
     card.addEventListener("click", (e) => {
       const tag = e.target.tagName;
@@ -1759,9 +1529,6 @@ function renderBulkEdit(ctx) {
       deviceMode[devicesAvailable[di].name] = sel.value;
     });
   });
-  sr.querySelectorAll(".be-action-section .param-input, .be-time-input, .be-filter-input, #be-locked").forEach((el) => {
-    el.addEventListener("click", (e) => e.stopPropagation());
-  });
   sr.getElementById("be-apply").addEventListener("click", async (e) => {
     e.stopPropagation();
     const applyBtn = sr.getElementById("be-apply");
@@ -1770,37 +1537,8 @@ function renderBulkEdit(ctx) {
     applyBtn.disabled = true;
     applyBtn.textContent = `Applying to ${matched.length} slots\u2026`;
     const commonBase = { device_id: deviceId || entryId };
-    const numVal = (id, fallback) => {
-      const v = parseFloat(sr.getElementById(id)?.value);
-      return isNaN(v) ? fallback : v;
-    };
-    const optNumVal = (id) => {
-      const v = sr.getElementById(id)?.value;
-      return v !== "" && v != null ? parseFloat(v) : null;
-    };
     try {
-      const actionFields = { action: selAction };
-      if (selAction === "charge") {
-        const untilPct = optNumVal("be-charge-until");
-        actionFields.wattage = numVal("be-charge-w", kwpW);
-        if (untilPct != null) actionFields.until_pct = untilPct;
-      } else if (selAction === "discharge") {
-        const untilPct = optNumVal("be-discharge-until");
-        actionFields.wattage = numVal("be-discharge-w", kwpW);
-        if (untilPct != null) actionFields.until_pct = untilPct;
-      } else if (selAction === "use_net") {
-        const maxWatts = optNumVal("be-usenet-max");
-        actionFields.use_solar = sr.getElementById("be-usenet-solar")?.classList.contains("on") ?? true;
-        if (maxWatts != null) actionFields.max_wattage = maxWatts;
-      } else if (selAction === "car_charge") {
-        const netCardOn = sr.getElementById("be-wc-car-net")?.classList.contains("on") ?? false;
-        const batCardOn = sr.getElementById("be-wc-car-bat")?.classList.contains("on") ?? false;
-        const batUntil = batCardOn ? optNumVal("be-car-bat-until") : null;
-        actionFields.use_solar = sr.getElementById("be-car-solar")?.classList.contains("on") ?? true;
-        actionFields.use_net_wattage = netCardOn ? numVal("be-car-net-w", 0) : 0;
-        actionFields.use_battery_wattage = batCardOn ? numVal("be-car-bat-w", 0) : 0;
-        if (batUntil != null) actionFields.use_battery_until_pct = batUntil;
-      }
+      const actionFields = form.read();
       const devices = {};
       for (const d of devicesAvailable) {
         const intent = deviceIntents[d.name];
@@ -1847,7 +1585,7 @@ function renderBulkEdit(ctx) {
         device_id: deviceId || entryId,
         slots: matched.map((idx) => ({ time: slots[idx].start ?? slots[idx].time, locked }))
       });
-      btn.textContent = locked ? `\u2713 Locked ${matched.length}` : `\u2713 Unlocked ${matched.length}`;
+      btn.textContent = `\u2713 ${matched.length}`;
       setTimeout(() => {
         ctx.onApplied();
         ctx.onClose();
@@ -1916,6 +1654,29 @@ function renderPlanner(ctx) {
   const future = slots.filter((s) => slotStart(s) + durMs > now.getTime());
   const horizonEnd = future.length ? slotStart(future[future.length - 1]) + durMs : now.getTime();
   let amountMode = "kwh";
+  const sx = ctx.surplusEntities;
+  const surplusOn = sx.toggle ? hass?.states[sx.toggle]?.state === "on" : false;
+  const stateNum = (id) => id ? hass?.states[id]?.state ?? "" : "";
+  const surplusHtml = sx.toggle ? `
+    <div class="be-range-section">
+      <div class="be-section-label">Excess solar</div>
+      <div class="pl-grid">
+        <button class="toggle-btn${surplusOn ? " on" : ""}" id="pl-surplus" style="--tc:#ca8a04"
+          title="In any slot not locked or planned for the car">
+          <div class="toggle-btn-dot"></div>\u2600\u{1F697} Charge car on excess solar
+        </button>
+        ${sx.soc ? `<label class="param-row">
+          <span class="param-label">Battery above</span>
+          <input class="param-input" id="pl-surplus-soc" data-entity="${sx.soc}" type="number" min="0" max="100" step="1" value="${stateNum(sx.soc)}">
+          <span class="param-unit">%</span>
+        </label>` : ""}
+        ${sx.watts ? `<label class="param-row" title="Solar power minus the expected house load">
+          <span class="param-label">Surplus above</span>
+          <input class="param-input" id="pl-surplus-w" data-entity="${sx.watts}" type="number" min="0" max="20000" step="50" value="${stateNum(sx.watts)}">
+          <span class="param-unit">W</span>
+        </label>` : ""}
+      </div>
+    </div>` : "";
   const goalHtml = goal ? `<div class="pl-note">Active goal: <b>${goal.target_pct.toFixed(0)} %</b> by <b>${dayTimeLabel(new Date(goal.by))}</b></div>` : '<div class="pl-note">No goal set.</div>';
   sr.getElementById("popup").innerHTML = `
     <div class="be-header">
@@ -1963,6 +1724,8 @@ function renderPlanner(ctx) {
         <button class="be-apply-btn" id="pl-car-apply">Schedule car</button>
       </div>
     </div>
+
+    ${surplusHtml}
 
     <div class="be-range-section">
       <div class="be-section-label">Have the battery charged by a time</div>
@@ -2142,6 +1905,28 @@ function renderPlanner(ctx) {
       failed(btn, err);
     }
   });
+  const surplusBtn = sr.getElementById("pl-surplus");
+  surplusBtn?.addEventListener("click", async () => {
+    const on = !surplusBtn.classList.contains("on");
+    surplusBtn.classList.toggle("on", on);
+    try {
+      await hass.callService("switch", on ? "turn_on" : "turn_off", { entity_id: sx.toggle });
+    } catch (err) {
+      surplusBtn.classList.toggle("on", !on);
+      console.error("Planner error:", err);
+    }
+  });
+  sr.querySelectorAll("#pl-surplus-soc, #pl-surplus-w").forEach((el) => {
+    el.addEventListener("change", () => {
+      const inp = el;
+      const value = parseFloat(inp.value);
+      if (isNaN(value)) return;
+      hass.callService("number", "set_value", { entity_id: inp.dataset.entity, value }).catch((err) => {
+        inp.style.borderColor = "#dc2626";
+        console.error("Planner error:", err);
+      });
+    });
+  });
   sr.getElementById("pl-close").addEventListener("click", () => ctx.onClose());
   sr.getElementById("pl-back").addEventListener("click", () => ctx.onBack());
   sr.querySelectorAll("#popup .param-input").forEach((el) => el.addEventListener("click", (e) => e.stopPropagation()));
@@ -2153,6 +1938,8 @@ function renderPlanner(ctx) {
 var EmsDashboardCard = class extends HTMLElement {
   constructor() {
     super();
+    // The car-on-surplus switch and its two thresholds, for the planner.
+    this._surplusEntities = {};
     // Bound once, so the same reference can be removed again.
     this._onKeyBound = (e) => this._onKey(e);
     this.attachShadow({ mode: "open" });
@@ -2234,6 +2021,11 @@ var EmsDashboardCard = class extends HTMLElement {
       if (entry) this._planningEntityId = entry.entity_id;
       const kwpEntry = find("ems_kwp");
       if (kwpEntry) this._kwpEntityId = kwpEntry.entity_id;
+      this._surplusEntities = {
+        toggle: find("ems_car_on_surplus")?.entity_id,
+        soc: find("ems_car_surplus_soc")?.entity_id,
+        watts: find("ems_car_surplus_w")?.entity_id
+      };
       if (entry || kwpEntry) this._lastSer = "";
     } catch (err) {
     }
@@ -2293,6 +2085,8 @@ var EmsDashboardCard = class extends HTMLElement {
             battery_prediction: p.battery_prediction ?? slot.battery_prediction,
             solar_w: p.solar_w ?? slot.solar_w,
             load_w: p.load_w ?? slot.load_w,
+            surplus_rule: p.surplus_rule ?? slot.surplus_rule,
+            car_surplus: p.car_surplus ?? slot.car_surplus,
             price: slot.price || p.price || 0,
             _injPrice: slot._injPrice || p.injection_price || 0
           };
@@ -2791,6 +2585,7 @@ var EmsDashboardCard = class extends HTMLElement {
       hass: this._hass,
       kwpEntityId: this._kwpEntityId,
       planningEntityId: this._planningEntityId,
+      surplusEntities: this._surplusEntities,
       onClose: () => this._closePopup(),
       onBack: () => this._renderPopup(fromIdx),
       onApplied: () => {
