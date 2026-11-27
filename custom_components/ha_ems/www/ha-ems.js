@@ -11,7 +11,6 @@ var CSS = `
   font-family:inherit;
   padding:16px; border-radius:12px;
   user-select:none;
-  container-type:inline-size;
 }
 *{margin:0;padding:0;box-sizing:border-box;}
 
@@ -19,9 +18,11 @@ header{display:flex;align-items:baseline;gap:16px;margin-bottom:20px;}
 header h1{font-family:var(--code-font-family, monospace);font-size:16px;font-weight:600;color:var(--text-bright);letter-spacing:.05em;text-transform:uppercase;}
 header span{font-family:var(--code-font-family, monospace);font-size:10px;color:var(--text-dim);letter-spacing:.1em;}
 
-.stats{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;}
+/* The stats row is the query container rather than .root: a container
+   ancestor traps the position:fixed dialog inside the card (Safari). */
+.stats{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;container-type:inline-size;}
 .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px;flex:1;min-width:140px;}
-@container(max-width:360px){.stat-card{flex:1 1 100%;min-width:unset;}}
+@container(max-width:328px){.stat-card{flex:1 1 100%;min-width:unset;}}
 .stat-label{font-family:var(--code-font-family, monospace);font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;}
 .stat-value{font-family:var(--code-font-family, monospace);font-size:18px;font-weight:700;color:var(--text-bright);}
 .stat-unit{font-size:10px;font-weight:400;color:var(--text-dim);margin-left:2px;}
@@ -340,12 +341,15 @@ header[hidden]{display:none;}
 .be-lock-btn:hover{background:rgba(127,127,127,.12);}
 .be-lock-btn:disabled{opacity:.5;cursor:default;}
 
-/* Phones: the dialog takes the whole screen */
-@media (max-width:600px){
+/* Phones, portrait or landscape: the dialog takes the whole screen */
+@media (max-width:600px),(max-height:500px){
   #overlay{align-items:stretch;}
-  #popup{width:100vw;height:100vh;height:100dvh;max-height:none;border:none;border-radius:0;animation:none;display:flex;flex-direction:column;}
+  #popup{width:100vw;height:100vh;height:100dvh;max-height:none;border:none;border-radius:0;animation:none;display:flex;flex-direction:column;
+    padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right);}
+  /* Keep the header below the notch and the footer above the home bar. */
+  .ph,.be-header{padding-top:max(8px,env(safe-area-inset-top));}
   /* The footer sits at the bottom of the screen even when the content is short. */
-  .pop-foot{margin-top:auto;}
+  .pop-foot{margin-top:auto;padding-bottom:max(8px,env(safe-area-inset-bottom));}
   .pt-price{font-size:13px;}
 }
 /* Touch: bigger targets, and 16px inputs so iOS doesn't zoom on focus */
