@@ -21,6 +21,18 @@ planning_idle:
       default: false
       selector:
         boolean:
+    when:
+      name: "Only when"
+      description: "Run this action only while all conditions hold (at most two). Each is {on: soc | solar | surplus, op: above | below, value}. Surplus is solar minus the expected house load. Example: [{on: soc, op: above, value: 30}]"
+      example: "[{on: soc, op: above, value: 30}]"
+      selector:
+        object:
+    otherwise:
+      name: "Otherwise"
+      description: "What runs while the conditions don't hold: an action plus its fields, e.g. {action: use_net, use_solar: true}. Default: idle."
+      example: "{action: use_net, use_solar: true}"
+      selector:
+        object:
 
 planning_charge:
   name: "Planning - Charge"
@@ -64,6 +76,18 @@ planning_charge:
           max: 100
           unit_of_measurement: "%"
           mode: box
+    when:
+      name: "Only when"
+      description: "Run this action only while all conditions hold (at most two). Each is {on: soc | solar | surplus, op: above | below, value}. Surplus is solar minus the expected house load. Example: [{on: soc, op: above, value: 30}]"
+      example: "[{on: soc, op: above, value: 30}]"
+      selector:
+        object:
+    otherwise:
+      name: "Otherwise"
+      description: "What runs while the conditions don't hold: an action plus its fields, e.g. {action: use_net, use_solar: true}. Default: idle."
+      example: "{action: use_net, use_solar: true}"
+      selector:
+        object:
 
 planning_discharge:
   name: "Planning - Discharge"
@@ -107,6 +131,18 @@ planning_discharge:
           max: 100
           unit_of_measurement: "%"
           mode: box
+    when:
+      name: "Only when"
+      description: "Run this action only while all conditions hold (at most two). Each is {on: soc | solar | surplus, op: above | below, value}. Surplus is solar minus the expected house load. Example: [{on: soc, op: above, value: 30}]"
+      example: "[{on: soc, op: above, value: 30}]"
+      selector:
+        object:
+    otherwise:
+      name: "Otherwise"
+      description: "What runs while the conditions don't hold: an action plus its fields, e.g. {action: use_net, use_solar: true}. Default: idle."
+      example: "{action: use_net, use_solar: true}"
+      selector:
+        object:
 
 planning_use_net:
   name: "Planning - Use Net"
@@ -146,6 +182,18 @@ planning_use_net:
       default: false
       selector:
         boolean:
+    when:
+      name: "Only when"
+      description: "Run this action only while all conditions hold (at most two). Each is {on: soc | solar | surplus, op: above | below, value}. Surplus is solar minus the expected house load. Example: [{on: soc, op: above, value: 30}]"
+      example: "[{on: soc, op: above, value: 30}]"
+      selector:
+        object:
+    otherwise:
+      name: "Otherwise"
+      description: "What runs while the conditions don't hold: an action plus its fields, e.g. {action: use_net, use_solar: true}. Default: idle."
+      example: "{action: use_net, use_solar: true}"
+      selector:
+        object:
 
 planning_car_charge_slot:
   name: "Planning - Car Charge (Slot)"
@@ -203,6 +251,18 @@ planning_car_charge_slot:
           max: 100
           unit_of_measurement: "%"
           mode: box
+    when:
+      name: "Only when"
+      description: "Run this action only while all conditions hold (at most two). Each is {on: soc | solar | surplus, op: above | below, value}. Surplus is solar minus the expected house load. Example: [{on: soc, op: above, value: 30}]"
+      example: "[{on: soc, op: above, value: 30}]"
+      selector:
+        object:
+    otherwise:
+      name: "Otherwise"
+      description: "What runs while the conditions don't hold: an action plus its fields, e.g. {action: use_net, use_solar: true}. Default: idle."
+      example: "{action: use_net, use_solar: true}"
+      selector:
+        object:
 
 planning_charge_car:
   name: "Planning - Charge Car"

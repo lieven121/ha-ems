@@ -179,3 +179,74 @@ def test_efficiency_applies_both_ways():
     charged = sim(50, ACTION_CHARGE, {"wattage": 1000}, load=0, efficiency=eta)
     assert charged.soc == pytest.approx(59)
     assert sim(50, ACTION_IDLE, load=900, efficiency=eta).soc == pytest.approx(40)
+
+
+# --- Conditions --------------------------------------------------------------
+
+IDLE_DOWN_TO_40 = {
+    "when": [{"on": "soc", "op": "above", "value": 40}],
+    "otherwise": {"action": ACTION_USE_NET, "config": {}},
+}
+
+
+def test_soc_condition_switches_within_the_slot():
+    # Idle would drain 50 -> 40 in half the slot; the other half uses the grid.
+    res = simulate_slot(50, ACTION_IDLE, IDLE_DOWN_TO_40, 2000, H, KWH)
+    assert res.soc == pytest.approx(40)
+    assert res.import_kwh == pytest.approx(1.0)
+
+
+def test_soc_condition_already_past_runs_the_fallback():
+    assert step_soc(35, ACTION_IDLE, IDLE_DOWN_TO_40, 2000, H, KWH) == pytest.approx(35)
+
+
+def test_soc_condition_not_reached_runs_the_action_all_slot():
+    res = simulate_slot(80, ACTION_IDLE, IDLE_DOWN_TO_40, 1000, H, KWH)
+    assert res.soc == pytest.approx(70)
+    assert res.import_kwh == pytest.approx(0)
+
+
+def test_soc_condition_can_also_switch_on_within_the_slot():
+    # Idle charges from solar until 60, then the surplus is exported.
+    cfg = {
+        "when": [{"on": "soc", "op": "below", "value": 60}],
+        "otherwise": {"action": ACTION_USE_NET, "config": {"use_solar": False}},
+    }
+    res = simulate_slot(50, ACTION_IDLE, cfg, 0, H, KWH, solar_w=2000)
+    assert res.soc == pytest.approx(60)
+    assert res.export_kwh == pytest.approx(1.0)
+
+
+@pytest.mark.parametrize(("solar_w", "car_kwh"), [(3000, 2.5), (1000, 0.0)])
+def test_surplus_condition_uses_the_forecast(solar_w, car_kwh):
+    cfg = {
+        "use_solar": True,
+        "use_net_wattage": 0,
+        "when": [{"on": "surplus", "op": "above", "value": 1500}],
+        "otherwise": {"action": ACTION_USE_NET, "config": {"use_solar": False}},
+    }
+    res = simulate_slot(50, ACTION_CAR_CHARGE, cfg, 500, H, KWH, solar_w=solar_w)
+    # The car takes the surplus; otherwise it is exported.
+    assert res.export_kwh == pytest.approx((solar_w - 500) / 1000 - car_kwh)
+    assert res.import_kwh == pytest.approx(0)
+
+
+def test_car_on_solar_takes_the_surplus_beyond_its_grid_power():
+    cfg = {"use_solar": True, "use_net_wattage": 1000}
+    res = simulate_slot(50, ACTION_CAR_CHARGE, cfg, 500, H, KWH, solar_w=4000)
+    assert res.export_kwh == pytest.approx(0)
+    # Less surplus than the grid power: the car still gets its 1000 W.
+    res = simulate_slot(50, ACTION_CAR_CHARGE, cfg, 500, H, KWH, solar_w=1000)
+    assert res.import_kwh == pytest.approx(0.5)
+
+
+def test_surplus_rule_wraps_a_slot_with_its_own_condition():
+    from ha_ems.conditions import with_surplus_rule
+
+    # Battery full and plenty of sun: the car takes the surplus.
+    action, cfg = with_surplus_rule(ACTION_IDLE, IDLE_DOWN_TO_40, 98, 1500)
+    res = simulate_slot(99, action, cfg, 500, H, KWH, solar_w=3000)
+    assert (res.soc, res.export_kwh) == (pytest.approx(99), pytest.approx(0))
+    # No sun: the slot's own condition runs, idle down to 40 then the grid.
+    res = simulate_slot(50, action, cfg, 2000, H, KWH)
+    assert (res.soc, res.import_kwh) == (pytest.approx(40), pytest.approx(1.0))

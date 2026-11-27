@@ -108,7 +108,8 @@ class EMSCurrentActionSensor(CoordinatorEntity[EMSCoordinator], SensorEntity):
     def native_value(self) -> str:
         slot = self._current_slot()
         if slot:
-            return ACTION_LABELS.get(slot["action"], slot["action"])
+            action = self.coordinator.live.get("action", slot["action"])
+            return ACTION_LABELS.get(action, action)
         return "Unknown"
 
     @property
@@ -116,9 +117,17 @@ class EMSCurrentActionSensor(CoordinatorEntity[EMSCoordinator], SensorEntity):
         slot = self._current_slot()
         if not slot:
             return {}
-        action_config = slot.get("action_config") or {}
+        # What runs right now: a slot with conditions runs its own action or
+        # its fallback, and the car-on-surplus rule can take a slot over.
+        live = self.coordinator.live
+        action_config = live.get("action_config", slot.get("action_config") or {})
         attrs: dict[str, Any] = {
-            "action": slot["action"],
+            "action": live.get("action", slot["action"]),
+            "planned_action": slot["action"],
+            "summary": live.get("summary"),
+            "condition": live.get("condition"),
+            "condition_met": live.get("condition_met"),
+            "car_on_surplus": live.get("rule") == "surplus",
             "start": slot["start"],
             "price": slot.get("price"),
             "locked": slot.get("locked", False),

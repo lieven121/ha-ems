@@ -20,6 +20,8 @@ from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     MockModule,
+    async_capture_events,
+    async_fire_time_changed,
     mock_integration,
     mock_platform,
 )
@@ -171,9 +173,11 @@ async def _setup_ems(hass: HomeAssistant, now) -> MockConfigEntry:
     return entry
 
 
-def _entity_id(hass: HomeAssistant, entry: MockConfigEntry, suffix: str) -> str:
+def _entity_id(
+    hass: HomeAssistant, entry: MockConfigEntry, suffix: str, domain: str = "sensor"
+) -> str:
     entity_id = er.async_get(hass).async_get_entity_id(
-        "sensor", DOMAIN, f"{entry.entry_id}_{suffix}"
+        domain, DOMAIN, f"{entry.entry_id}_{suffix}"
     )
     assert entity_id, suffix
     return entity_id
@@ -321,3 +325,101 @@ async def test_battery_goal_is_planned_for_and_can_be_cleared(hass: HomeAssistan
     )
     state = hass.states.get(_entity_id(hass, ems, "ems_planning"))
     assert state.attributes["battery_goal"] is None
+
+
+async def _use_live_solar(hass: HomeAssistant, entry: MockConfigEntry, watts: float) -> None:
+    """Point the entry at a live solar power sensor (reloads it)."""
+    hass.states.async_set("sensor.solar_now", str(watts), {"unit_of_measurement": "W"})
+    hass.config_entries.async_update_entry(
+        entry, data={**entry.data, "solar_power_entity_id": "sensor.solar_now"}
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+
+def _current(hass: HomeAssistant, entry: MockConfigEntry):
+    state = hass.states.get(_entity_id(hass, entry, "ems_current_action"))
+    assert state is not None
+    return state
+
+
+async def test_condition_follows_live_solar_with_hysteresis(
+    hass: HomeAssistant, ems, freezer
+) -> None:
+    await _use_live_solar(hass, ems, 0)
+    events = async_capture_events(hass, "ha_ems_action_changed")
+    now_slot = _current(hass, ems).attributes["start"]
+    await hass.services.async_call(
+        DOMAIN,
+        "planning_car_charge_slot",
+        {
+            "device_id": _device_id(hass, ems),
+            "time": now_slot,
+            "locked": True,
+            "use_net_wattage": 0,
+            "when": [{"on": "solar", "op": "above", "value": 1500}],
+            "otherwise": {"action": "use_net", "use_solar": True},
+        },
+        blocking=True,
+    )
+    state = _current(hass, ems)
+    assert state.attributes["planned_action"] == "car_charge"
+    assert state.attributes["action"] == "use_net"
+    assert state.attributes["condition"] == "solar ≥ 1500 W"
+    assert state.attributes["condition_met"] is False
+
+    # The sun comes out: the car only starts once it has lasted two minutes.
+    hass.states.async_set("sensor.solar_now", "2000", {"unit_of_measurement": "W"})
+    await hass.async_block_till_done()
+    assert _current(hass, ems).attributes["action"] == "use_net"
+    freezer.tick(timedelta(minutes=3))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    state = _current(hass, ems)
+    assert (state.attributes["action"], state.attributes["condition_met"]) == ("car_charge", True)
+    assert events[-1].data["action"] == "car_charge"
+    assert events[-1].data["planned_action"] == "car_charge"
+
+    # A dip within the margin keeps it going; a real drop stops it at once.
+    hass.states.async_set("sensor.solar_now", "1400", {"unit_of_measurement": "W"})
+    await hass.async_block_till_done()
+    assert _current(hass, ems).attributes["action"] == "car_charge"
+    hass.states.async_set("sensor.solar_now", "1.2", {"unit_of_measurement": "kW"})
+    await hass.async_block_till_done()
+    assert _current(hass, ems).attributes["action"] == "use_net"
+    assert events[-1].data["action"] == "use_net"
+
+
+async def test_car_charges_on_surplus_unless_switched_off(hass: HomeAssistant, ems) -> None:
+    hass.states.async_set("sensor.battery_soc", "99")
+    await _use_live_solar(hass, ems, 3000)
+    state = _current(hass, ems)
+    assert state.attributes["planned_action"] == "idle"
+    assert state.attributes["action"] == "car_charge"
+    assert state.attributes["car_on_surplus"] is True
+    assert state.attributes["use_net_wattage"] == 0
+    assert all(s["surplus_rule"] for s in _slots(hass, ems) if not s["locked"])
+
+    switch = _entity_id(hass, ems, "ems_car_on_surplus", "switch")
+    assert hass.states.get(switch).state == "on"
+    await hass.services.async_call(
+        "switch", "turn_off", {"entity_id": switch}, blocking=True
+    )
+    state = _current(hass, ems)
+    assert (state.attributes["action"], state.attributes["car_on_surplus"]) == ("idle", False)
+    assert not any(s["surplus_rule"] for s in _slots(hass, ems))
+
+
+async def test_bad_condition_is_a_clear_error(hass: HomeAssistant, ems) -> None:
+    from homeassistant.exceptions import ServiceValidationError
+
+    with pytest.raises(ServiceValidationError, match="Unknown condition"):
+        await hass.services.async_call(
+            DOMAIN,
+            "planning_idle",
+            {
+                "device_id": _device_id(hass, ems),
+                "time": _slots(hass, ems)[1]["start"],
+                "when": [{"on": "wind", "op": "above", "value": 1}],
+            },
+            blocking=True,
+        )

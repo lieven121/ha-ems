@@ -22,6 +22,7 @@ from homeassistant.helpers.selector import (
 from .const import (
     CONF_BATTERY_ENTITY_ID,
     CONF_BATTERY_SIZE_KWH,
+    CONF_CAR_CONNECTED_ENTITY_ID,
     CONF_DEVICE_CONTROL,
     CONF_DEVICE_DEFAULT_WATTAGE,
     CONF_DEVICE_MODES,
@@ -33,6 +34,7 @@ from .const import (
     CONF_PRICE_ENTITY_ID,
     CONF_PRICE_KEY,
     CONF_ROUNDTRIP_LOSS_PCT,
+    CONF_SOLAR_POWER_ENTITY_ID,
     CONF_START_KEY,
     DEFAULT_DEVICE_WATTAGE,
     DEFAULT_PRICE_ATTRIBUTE,
@@ -96,6 +98,20 @@ def _battery_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
             mode=NumberSelectorMode.BOX,
             unit_of_measurement="kWh",
         )
+    )
+    schema[
+        vol.Optional(
+            CONF_SOLAR_POWER_ENTITY_ID,
+            description={"suggested_value": d.get(CONF_SOLAR_POWER_ENTITY_ID, "")},
+        )
+    ] = EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power"))
+    schema[
+        vol.Optional(
+            CONF_CAR_CONNECTED_ENTITY_ID,
+            description={"suggested_value": d.get(CONF_CAR_CONNECTED_ENTITY_ID, "")},
+        )
+    ] = EntitySelector(
+        EntitySelectorConfig(domain=["binary_sensor", "input_boolean", "device_tracker"])
     )
     schema[
         vol.Required(

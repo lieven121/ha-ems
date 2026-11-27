@@ -16,6 +16,8 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
     ENTITY_AVG_CONSUMPTION,
+    ENTITY_CAR_SURPLUS_SOC,
+    ENTITY_CAR_SURPLUS_W,
     ENTITY_CYCLE_COST,
     ENTITY_KWP,
     ENTITY_MAX_BATTERY,
@@ -105,6 +107,30 @@ NUMBERS: tuple[EMSNumberDescription, ...] = (
         native_step=0.01,
         mode=NumberMode.BOX,
         icon="mdi:battery-sync",
+    ),
+    # The car-on-surplus rule: charge the car once the battery is this full...
+    EMSNumberDescription(
+        key=ENTITY_CAR_SURPLUS_SOC,
+        translation_key=ENTITY_CAR_SURPLUS_SOC,
+        setting="car_surplus_soc",
+        native_min_value=0.0,
+        native_max_value=100.0,
+        native_step=1.0,
+        native_unit_of_measurement="%",
+        mode=NumberMode.BOX,
+        icon="mdi:battery-charging-high",
+    ),
+    # ...and solar beats the expected house load by this much.
+    EMSNumberDescription(
+        key=ENTITY_CAR_SURPLUS_W,
+        translation_key=ENTITY_CAR_SURPLUS_W,
+        setting="car_surplus_w",
+        native_min_value=0.0,
+        native_max_value=20000.0,
+        native_step=50.0,
+        native_unit_of_measurement="W",
+        mode=NumberMode.BOX,
+        icon="mdi:solar-power-variant",
     ),
 )
 

@@ -14,6 +14,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.event import (
+    async_call_later,
     async_track_point_in_time,
     async_track_state_change_event,
     async_track_time_change,
@@ -22,11 +23,27 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util.dt import as_local, now, parse_datetime
 
+from .conditions import (
+    SURPLUS_CAR_CONFIG,
+    Condition,
+    describe_conditions,
+    guard,
+    is_met,
+    strip_guard,
+    summary,
+    surplus_rule,
+    surplus_rule_applies,
+    with_surplus_rule,
+)
 from .const import (
     ACTION_CAR_CHARGE,
     ACTION_IDLE,
+    COND_SOC,
+    COND_SOLAR,
+    COND_SURPLUS,
     CONF_BATTERY_ENTITY_ID,
     CONF_BATTERY_SIZE_KWH,
+    CONF_CAR_CONNECTED_ENTITY_ID,
     CONF_DEVICE_CONTROL,
     CONF_DEVICE_DEFAULT_WATTAGE,
     CONF_DEVICE_MODES,
@@ -38,6 +55,7 @@ from .const import (
     CONF_PRICE_ENTITY_ID,
     CONF_PRICE_KEY,
     CONF_ROUNDTRIP_LOSS_PCT,
+    CONF_SOLAR_POWER_ENTITY_ID,
     CONF_START_KEY,
     DEFAULT_DEVICE_WATTAGE,
     DEFAULT_ROUNDTRIP_LOSS_PCT,
@@ -63,6 +81,9 @@ _SAVE_DELAY_S = 2
 _PLANNING_RETENTION = timedelta(hours=48)
 _PROFILE_HISTORY = timedelta(days=28)
 _BIAS_REFRESH = timedelta(minutes=30)
+# A condition must hold this long before its action takes over, so a short
+# burst of sun doesn't start the car. The first check in a slot is immediate.
+_GUARD_ON_DELAY = timedelta(minutes=2)
 
 
 class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
@@ -102,6 +123,17 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         # every refresh (and a refresh is scheduled at each slot boundary).
         self.current_slot_index: int | None = None
         self._unsub_slot_timer: Any | None = None  # cancels current slot-boundary timer
+
+        # What the current slot runs right now, its conditions judged on live
+        # values; see _resolve_live. Keys: action, action_config,
+        # planned_action, condition, condition_met, rule.
+        self.live: dict[str, Any] = {}
+        # Per guard ("slot", "surplus"): whether it holds, and since when it
+        # has been waiting to switch on. Reset at every slot boundary.
+        self._guard_slot: str | None = None
+        self._guard_on: dict[str, bool] = {}
+        self._guard_since: dict[str, datetime] = {}
+        self._unsub_guard_timer: Any | None = None
 
     # ------------------------------------------------------------------
     # Device info
@@ -508,6 +540,7 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 }
                 for dev_name, dev_cfg in (override.get("devices") or {}).items()
             ]
+            slot["surplus_rule"] = self.settings.car_on_surplus and surplus_rule_applies(slot)
             slot["battery_prediction"] = None
             slots.append(slot)
 
@@ -568,16 +601,26 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         anchor_idx = current_idx if current_idx is not None else 0
 
         soc = current_soc
+        settings = self.settings
         for i in range(anchor_idx, len(slots)):
             slot = slots[i]
             hours = slot_duration_h
             if i == current_idx:
                 # Only what is left of the running slot can still move the SoC.
                 hours = self._remaining_hours(slot, slot_duration_h, current_time)
+            action, action_config = slot["action"], slot.get("action_config") or {}
+            if slot.get("surplus_rule"):
+                # Expected to start the car: the card marks these slots.
+                slot["car_surplus"] = soc >= settings.car_surplus_soc and (
+                    slot["solar_w"] - slot["load_w"] >= settings.car_surplus_w
+                )
+                action, action_config = with_surplus_rule(
+                    action, action_config, settings.car_surplus_soc, settings.car_surplus_w
+                )
             soc = step_soc(
                 soc,
-                slot["action"],
-                slot.get("action_config") or {},
+                action,
+                action_config,
                 slot["load_w"],
                 hours,
                 battery_size_kwh,
@@ -655,27 +698,8 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         await self._async_update_forecasts()
         slots = self._build_slots()
 
-        # Detect current-slot action change and fire event
         idx = self.current_slot_index = self._nowslot_idx(slots)
-        if idx is not None:
-            current_action = slots[idx]["action"]
-            if self._last_action is None:
-                # First refresh after startup/reload: nothing actually changed,
-                # so seed the state without waking up automations.
-                self._last_action = current_action
-            elif current_action != self._last_action:
-                prev = self._last_action
-                self._last_action = current_action
-                self.hass.bus.async_fire(
-                    EVENT_ACTION_CHANGED,
-                    {
-                        "entry_id": self.config_entry.entry_id,
-                        "previous_action": prev,
-                        "action": current_action,
-                        "start": slots[idx]["start"],
-                        "price": slots[idx]["price"],
-                    },
-                )
+        self._resolve_live(slots[idx] if idx is not None else None)
 
         # Schedule a precise refresh at the next slot boundary so the current
         # action sensor updates immediately when the slot changes rather than
@@ -689,6 +713,189 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
             self._unsub_slot_timer()
             self._unsub_slot_timer = None
 
+    # ------------------------------------------------------------------
+    # Live conditions
+    # ------------------------------------------------------------------
+
+    def async_start_live_tracking(self) -> None:
+        """Re-judge the current slot's conditions whenever a live value changes."""
+        cfg = self._cfg()
+        entities = [
+            entity_id
+            for entity_id in (
+                cfg.get(CONF_BATTERY_ENTITY_ID),
+                cfg.get(CONF_SOLAR_POWER_ENTITY_ID),
+                cfg.get(CONF_CAR_CONNECTED_ENTITY_ID),
+            )
+            if entity_id
+        ]
+        if not entities:
+            return
+
+        @callback
+        def _on_change(_event: Any) -> None:
+            self._async_rejudge()
+
+        self.config_entry.async_on_unload(
+            async_track_state_change_event(self.hass, entities, _on_change)
+        )
+
+    @callback
+    def _async_rejudge(self) -> None:
+        """Resolve the current slot again; push to entities if anything changed."""
+        before = self.live
+        self._resolve_live(self.current_slot)
+        if self.live != before:
+            self.async_update_listeners()
+
+    def _live_solar_w(self, slot: dict[str, Any]) -> float:
+        """Solar power now, or the slot's forecast without a live sensor."""
+        entity_id = self._cfg().get(CONF_SOLAR_POWER_ENTITY_ID)
+        state = self.hass.states.get(entity_id) if entity_id else None
+        if state is not None:
+            try:
+                value = float(state.state)
+            except (TypeError, ValueError):
+                value = None
+            if value is not None and math.isfinite(value):
+                if state.attributes.get("unit_of_measurement") == "kW":
+                    value *= 1000.0
+                return value
+        return float(slot.get("solar_w") or 0.0)
+
+    def _live_values(self, slot: dict[str, Any]) -> dict[str, float | None]:
+        solar = self._live_solar_w(slot)
+        return {
+            COND_SOC: self._get_current_soc(),
+            COND_SOLAR: solar,
+            # Against the expected house load rather than the grid meter: once
+            # the car takes the surplus, the meter no longer shows it.
+            COND_SURPLUS: solar - float(slot.get("load_w") or 0.0),
+        }
+
+    def _car_connected(self) -> bool:
+        """Whether the car is plugged in; always, without a sensor for it."""
+        entity_id = self._cfg().get(CONF_CAR_CONNECTED_ENTITY_ID)
+        if not entity_id:
+            return True
+        state = self.hass.states.get(entity_id)
+        return state is not None and state.state in ("on", "home")
+
+    def _guard_holds(
+        self, name: str, conds: list[Condition], values: dict[str, float | None]
+    ) -> bool:
+        """Judge guard *name* with hysteresis.
+
+        Switching off is immediate (the margin is in is_met). Switching on waits
+        _GUARD_ON_DELAY, except on the first check in a slot.
+        """
+        was = self._guard_on.get(name)
+        met = all(is_met(c, values.get(c["on"]), holding=bool(was)) for c in conds)
+        if was is None or was or not met:
+            self._guard_on[name] = met
+            self._guard_since.pop(name, None)
+            return met
+        current = now()
+        since = self._guard_since.setdefault(name, current)
+        wait = since + _GUARD_ON_DELAY - current
+        if wait <= timedelta(0):
+            self._guard_on[name] = True
+            del self._guard_since[name]
+            return True
+        self._schedule_guard_check(wait)
+        return False
+
+    def _schedule_guard_check(self, wait: timedelta) -> None:
+        self._cancel_guard_timer()
+
+        @callback
+        def _on_timer(_now: Any) -> None:
+            self._unsub_guard_timer = None
+            self._async_rejudge()
+
+        self._unsub_guard_timer = async_call_later(
+            self.hass, wait.total_seconds() + 0.5, _on_timer
+        )
+
+    def _cancel_guard_timer(self) -> None:
+        if self._unsub_guard_timer is not None:
+            self._unsub_guard_timer()
+            self._unsub_guard_timer = None
+
+    def _resolve_live(self, slot: dict[str, Any] | None) -> None:
+        """Work out what *slot* (the current one) runs right now.
+
+        Fires EVENT_ACTION_CHANGED when that differs from before, whether a
+        new slot started or a condition changed within one.
+        """
+        if slot is None:
+            self.live = {}
+            return
+        if slot["start"] != self._guard_slot:
+            self._guard_slot = slot["start"]
+            self._guard_on.clear()
+            self._guard_since.clear()
+            self._cancel_guard_timer()
+
+        planned, cfg = slot["action"], slot.get("action_config") or {}
+        values = self._live_values(slot)
+        live: dict[str, Any] = {
+            "action": planned,
+            "action_config": dict(cfg),
+            "planned_action": planned,
+            "summary": summary(planned, cfg),
+            "condition": None,
+            "condition_met": None,
+            "rule": None,
+        }
+        settings = self.settings
+        if slot.get("surplus_rule") and self._car_connected():
+            conds = surplus_rule(settings.car_surplus_soc, settings.car_surplus_w)
+            if self._guard_holds("surplus", conds, values):
+                live.update(
+                    action=ACTION_CAR_CHARGE,
+                    action_config=dict(SURPLUS_CAR_CONFIG),
+                    summary=f"Car charging on excess solar ({describe_conditions(conds)})",
+                    condition=describe_conditions(conds),
+                    condition_met=True,
+                    rule="surplus",
+                )
+        else:
+            self._guard_on.pop("surplus", None)
+            self._guard_since.pop("surplus", None)
+
+        g = guard(cfg)
+        if g is not None and live["rule"] is None:
+            conds, other, other_cfg = g
+            met = self._guard_holds("slot", conds, values)
+            live.update(
+                action=planned if met else other,
+                action_config=strip_guard(cfg) if met else other_cfg,
+                condition=describe_conditions(conds),
+                condition_met=met,
+                rule="slot",
+            )
+        self.live = live
+
+        action = live["action"]
+        if self._last_action is None:
+            # First resolve after startup/reload: nothing actually changed, so
+            # seed the state without waking up automations.
+            self._last_action = action
+        elif action != self._last_action:
+            prev, self._last_action = self._last_action, action
+            self.hass.bus.async_fire(
+                EVENT_ACTION_CHANGED,
+                {
+                    "entry_id": self.config_entry.entry_id,
+                    "previous_action": prev,
+                    "action": action,
+                    "planned_action": planned,
+                    "start": slot["start"],
+                    "price": slot["price"],
+                },
+            )
+
     async def async_shutdown(self) -> None:
         """Stop the slot-boundary timer along with the regular poll.
 
@@ -696,6 +903,7 @@ class EMSCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         on every refresh, leaving one live coordinator behind per reload.
         """
         self._cancel_slot_timer()
+        self._cancel_guard_timer()
         # Flush any debounced write now, so a reload that loads the store
         # straight away doesn't read stale planning.
         await self._store.async_save(self._stored_data())

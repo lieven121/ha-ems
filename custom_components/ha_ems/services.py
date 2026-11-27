@@ -12,6 +12,7 @@ from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 
+from .conditions import normalize_otherwise, normalize_when
 from .const import (
     ACTION_CAR_CHARGE,
     ACTION_CHARGE,
@@ -33,6 +34,7 @@ from .const import (
     FIELD_MAX_PRICE,
     FIELD_MAX_WATTAGE,
     FIELD_MODE,
+    FIELD_OTHERWISE,
     FIELD_SLOTS,
     FIELD_SLOTS_WANTED,
     FIELD_START,
@@ -46,6 +48,7 @@ from .const import (
     FIELD_USE_NET_WATTAGE,
     FIELD_USE_SOLAR,
     FIELD_WATTAGE,
+    FIELD_WHEN,
     SERVICE_PLANNING_BATTERY_GOAL,
     SERVICE_PLANNING_BULK,
     SERVICE_PLANNING_CAR_CHARGE_SLOT,
@@ -62,10 +65,19 @@ from .const import (
 )
 from .coordinator import EMSCoordinator
 
+# Optional on every per-slot action: run it only while the conditions hold,
+# and the fallback ({action, ...its fields}) otherwise. Checked in detail by
+# build_action_config, so the error names what is wrong.
+_GUARD: dict[vol.Marker, Any] = {
+    vol.Optional(FIELD_WHEN): vol.All(cv.ensure_list, [dict]),
+    vol.Optional(FIELD_OTHERWISE): dict,
+}
+
 _COMMON: dict[vol.Marker, Any] = {
     vol.Required(FIELD_DEVICE_ID): cv.string,
     vol.Required(FIELD_TIME): cv.string,
     vol.Optional(FIELD_LOCKED, default=False): cv.boolean,
+    **_GUARD,
 }
 
 _SERVICE_SCHEMAS: dict[str, vol.Schema] = {
@@ -100,6 +112,7 @@ _SERVICE_SCHEMAS: dict[str, vol.Schema] = {
             vol.Optional(FIELD_USE_NET_WATTAGE): vol.Coerce(float),
             vol.Optional(FIELD_USE_BATTERY_WATTAGE): vol.Coerce(float),
             vol.Optional(FIELD_USE_BATTERY_UNTIL_PCT): vol.Coerce(float),
+            **_GUARD,
         }
     ),
     SERVICE_PLANNING_CHARGE_CAR: vol.Schema(
@@ -184,6 +197,7 @@ _SERVICE_SCHEMAS: dict[str, vol.Schema] = {
                             vol.Optional(FIELD_USE_NET_WATTAGE): vol.Coerce(float),
                             vol.Optional(FIELD_USE_BATTERY_WATTAGE): vol.Coerce(float),
                             vol.Optional(FIELD_USE_BATTERY_UNTIL_PCT): vol.Coerce(float),
+                            **_GUARD,
                             # device name -> {wattage?, mode?} to schedule,
                             # or null to unschedule
                             vol.Optional(FIELD_DEVICES): {
@@ -207,6 +221,20 @@ _SERVICE_SCHEMAS: dict[str, vol.Schema] = {
 def build_action_config(action: str, data: Mapping[str, Any]) -> dict[str, Any]:
     """Build a slot's action_config from service fields, the same way for the
     single-slot services and for each entry of planning_bulk."""
+    cfg = _plain_action_config(action, data)
+    try:
+        when = normalize_when(data.get(FIELD_WHEN))
+        if not when:
+            return cfg
+        raw = data.get(FIELD_OTHERWISE) or {}
+        other = normalize_otherwise(raw)
+        other["config"] = _plain_action_config(other["action"], raw)
+    except ValueError as err:
+        raise ServiceValidationError(str(err)) from err
+    return {**cfg, FIELD_WHEN: when, FIELD_OTHERWISE: other}
+
+
+def _plain_action_config(action: str, data: Mapping[str, Any]) -> dict[str, Any]:
     if action in (ACTION_CHARGE, ACTION_DISCHARGE):
         if FIELD_WATTAGE not in data:
             raise ServiceValidationError(f"{action} needs a wattage")

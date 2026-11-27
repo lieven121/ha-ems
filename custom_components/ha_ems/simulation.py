@@ -19,11 +19,15 @@ import math
 from dataclasses import dataclass
 from typing import Any
 
+from .conditions import guard, is_met, strip_guard
 from .const import (
     ACTION_CAR_CHARGE,
     ACTION_CHARGE,
     ACTION_DISCHARGE,
     ACTION_USE_NET,
+    COND_SOC,
+    COND_SOLAR,
+    COND_SURPLUS,
 )
 
 
@@ -77,7 +81,87 @@ def simulate_slot(
     max_charge_w: float = 0.0,
     efficiency: float = 1.0,
 ) -> SlotResult:
-    """Simulate one slot.
+    """Simulate one slot, conditions included; see :func:`_simulate_action`.
+
+    A slot with conditions (see :mod:`.conditions`) runs its own action while
+    they hold and its fallback while they don't. Solar and surplus conditions
+    are judged on the forecast for the whole slot. SoC conditions can change
+    within the slot: the slot then switches once, at the moment the battery
+    reaches the threshold.
+    """
+    kwargs = {
+        "solar_w": solar_w,
+        "default_wattage": default_wattage,
+        "max_charge_w": max_charge_w,
+        "efficiency": efficiency,
+    }
+
+    def run(soc: float, act: str, cfg: dict[str, Any], hours: float) -> SlotResult:
+        # A fallback may have conditions of its own (the car-on-surplus rule
+        # around a slot that has some), so recurse.
+        return simulate_slot(soc, act, cfg, load_w, hours, battery_kwh, **kwargs)
+
+    g = guard(action_config)
+    if g is None:
+        return _simulate_action(
+            soc, action, action_config, load_w, slot_hours, battery_kwh, **kwargs
+        )
+    conds, other, other_cfg = g
+    primary_cfg = strip_guard(action_config)
+    forecast = {COND_SOLAR: solar_w, COND_SURPLUS: solar_w - load_w}
+    fixed = [c for c in conds if c["on"] != COND_SOC]
+    if not all(is_met(c, forecast.get(c["on"])) for c in fixed):
+        return run(soc, other, other_cfg, slot_hours)
+    soc_conds = [c for c in conds if c["on"] == COND_SOC]
+    if not soc_conds:
+        return run(soc, action, primary_cfg, slot_hours)
+
+    def holds(value: float) -> bool:
+        return all(is_met(c, value) for c in soc_conds)
+
+    on = holds(soc)
+    first = run(soc, *((action, primary_cfg) if on else (other, other_cfg)), slot_hours)
+    if abs(first.soc - soc) < 1e-9:
+        return first
+    # The battery moves at a steady rate within a slot: find the first
+    # threshold it passes that changes the outcome.
+    crossings = sorted(
+        (c["value"] - soc) / (first.soc - soc)
+        for c in soc_conds
+        if min(soc, first.soc) < c["value"] < max(soc, first.soc)
+    )
+    for frac in crossings:
+        past = soc + (first.soc - soc) * min(frac + 1e-6, 1.0)
+        if holds(past) == on:
+            continue
+        mid = soc + (first.soc - soc) * frac
+        rest = run(
+            mid,
+            *((other, other_cfg) if on else (action, primary_cfg)),
+            slot_hours * (1 - frac),
+        )
+        return SlotResult(
+            soc=rest.soc,
+            import_kwh=first.import_kwh * frac + rest.import_kwh,
+            export_kwh=first.export_kwh * frac + rest.export_kwh,
+        )
+    return first
+
+
+def _simulate_action(
+    soc: float,
+    action: str,
+    action_config: dict[str, Any],
+    load_w: float,
+    slot_hours: float,
+    battery_kwh: float,
+    *,
+    solar_w: float = 0.0,
+    default_wattage: float = 0.0,
+    max_charge_w: float = 0.0,
+    efficiency: float = 1.0,
+) -> SlotResult:
+    """Simulate one slot running one plain action.
 
     *load_w* is the house load (baseline plus scheduled devices), *solar_w*
     the expected PV output. *default_wattage* is used for charge/discharge
@@ -98,7 +182,9 @@ def simulate_slot(
       grid. Solar surplus (solar minus house and devices) charges the
       battery, unless ``use_solar`` is false: then it is exported. A
       ``max_wattage`` below the need makes the battery cover the difference.
-    - car_charge: only the configured battery budget moves the battery.
+    - car_charge: only the configured battery budget moves the battery. The
+      car draws ``use_net_wattage``, or the solar surplus if that is more and
+      ``use_solar`` is on.
 
     A charge whose target is already reached, or a discharge already at its
     floor, behaves as idle.
@@ -163,6 +249,8 @@ def simulate_slot(
         elif budget < 0:
             battery_in = min(-budget, max_in_w(100.0))
         car_w = _as_float(action_config.get("use_net_wattage"))
+        if action_config.get("use_solar", True) is not False:
+            car_w = max(car_w, -net)
     else:  # idle
         if net > 0:
             battery_out = min(net, max_out_w(0.0))

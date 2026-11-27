@@ -11,6 +11,9 @@ found by dynamic programming over the battery's state of charge:
 - Per slot, every allowed action is tried: idle (self-consumption), use_net
   (no discharge; solar surplus still charges), charge and, if allowed, discharge -- the last two to
   every reachable target SoC, so a slot can also charge just a little.
+- Idle is also tried with a floor: "idle while the battery is above X %,
+  otherwise use_net". That spends part of the battery now and keeps the rest
+  for a dearer slot later, which neither idle nor use_net alone can do.
 - Cost of a slot: grid import x price - export x injection price, plus the
   configured cycle cost per kWh the battery delivers. Dropping below
   min_battery is penalised so heavily that it only happens when nothing can
@@ -51,6 +54,10 @@ from .const import (
     ACTION_DISCHARGE,
     ACTION_IDLE,
     ACTION_USE_NET,
+    COND_SOC,
+    FIELD_OTHERWISE,
+    FIELD_WHEN,
+    OP_ABOVE,
 )
 from .models import EMSSettings
 from .simulation import one_way_efficiency, simulate_slot
@@ -65,6 +72,7 @@ _TIE = 1e-9
 # Preference order when two actions cost the same: leave the battery to its
 # own devices rather than steer it.
 _ACTION_RANK = {ACTION_IDLE: 0, ACTION_USE_NET: 1, ACTION_CHARGE: 2, ACTION_DISCHARGE: 3}
+_FLOOR_RANK = 0.5  # idle with a floor: between idle and use_net
 
 # Extra cost of discharging at full power, as a fraction of the mean price;
 # the marginal cost at full power is twice this. See the module docstring.
@@ -95,6 +103,20 @@ class OptimizerSlot:
     @property
     def is_fixed(self) -> bool:
         return self.fixed_action is not None
+
+
+def idle_floor_config(floor_pct: float) -> dict[str, Any]:
+    """Config for "idle while the battery is above *floor_pct*, otherwise use_net"."""
+    return {
+        FIELD_WHEN: [{"on": COND_SOC, "op": OP_ABOVE, "value": floor_pct}],
+        FIELD_OTHERWISE: {"action": ACTION_USE_NET, "config": {"use_solar": True}},
+    }
+
+
+def _rank(action: str, cfg: dict[str, Any]) -> float:
+    if action == ACTION_IDLE and cfg.get(FIELD_WHEN):
+        return _FLOOR_RANK
+    return _ACTION_RANK.get(action, 9)
 
 
 def terminal_price(slots: list[OptimizerSlot]) -> float:
@@ -187,6 +209,23 @@ class _Model:
             else:
                 end, grid_w, wear = solar_end, solar_grid, 0.0
             out.append((ACTION_IDLE, {}, end, self.cost(slot, grid_w), wear))
+            if net > 0:
+                # Idle down to a floor, then the grid: the battery delivers
+                # only what gets it to the floor.
+                floors = _targets(soc, end)[:-1]
+                if end < settings.min_battery < soc and settings.min_battery not in floors:
+                    floors.append(settings.min_battery)
+                for floor in floors:
+                    b_out = (soc - floor) / pct_out
+                    out.append(
+                        (
+                            ACTION_IDLE,
+                            idle_floor_config(floor),
+                            floor,
+                            self.cost(slot, net - b_out),
+                            b_out * cycle,
+                        )
+                    )
 
         max_soc, min_soc = settings.max_battery, settings.min_battery
         if soc < max_soc - _EPS:
@@ -324,7 +363,7 @@ def optimize(
         goal = goal_soc if slot.key == goal_key else 0.0
         for opt in model.options(slot, soc):
             score = total(opt, soc, values[t + 1], goal)
-            rank = _ACTION_RANK.get(opt[0], 9)
+            rank = _rank(opt[0], opt[1])
             if (
                 best is None
                 or score < best[0] - _TIE

@@ -349,3 +349,19 @@ def test_battery_goal_stops_at_max_battery():
     plan = run(opt, soc=50, goal=("s3", 100), max_battery=90)
     _, socs = replay(opt, plan, soc=50)
     assert socs[3] == pytest.approx(90)
+
+
+def test_idle_floor_keeps_battery_for_the_dearer_slot():
+    # 15 % above min_battery; the 40 slot needs only 10 %. The rest is worth
+    # more in the 30 slot than left over at the end (valued at 5), so s0
+    # spends exactly 5 % and stops: idle down to 20 %, then the grid.
+    opt_slots = slots([30, 40, 5])
+    plan = run(opt_slots, soc=25.0)
+    action, cfg = plan["s0"]
+    assert action == ACTION_IDLE
+    assert cfg["when"] == [{"on": "soc", "op": "above", "value": pytest.approx(20)}]
+    assert cfg["otherwise"]["action"] == ACTION_USE_NET
+    assert plan["s1"] == (ACTION_IDLE, {})
+    _, socs = replay(opt_slots, plan, soc=25.0)
+    assert socs[:2] == [pytest.approx(20), pytest.approx(10)]
+

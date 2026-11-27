@@ -25,12 +25,16 @@
         "data": {
           "battery_entity_id": "Battery SoC Entity (optional)",
           "battery_size_kwh": "Battery Capacity (kWh, optional)",
-          "roundtrip_loss_pct": "Round-trip Loss (%)"
+          "roundtrip_loss_pct": "Round-trip Loss (%)",
+          "solar_power_entity_id": "Live Solar Power (optional)",
+          "car_connected_entity_id": "Car Connected (optional)"
         },
         "data_description": {
           "battery_entity_id": "Number or sensor entity that reports the current State of Charge in %.",
           "battery_size_kwh": "Usable capacity of the battery in kWh.",
-          "roundtrip_loss_pct": "Energy lost in a full charge-discharge cycle (default: 20 %)."
+          "roundtrip_loss_pct": "Energy lost in a full charge-discharge cycle (default: 20 %).",
+          "solar_power_entity_id": "Sensor with the solar power right now, in W or kW. Slot conditions on solar or surplus use it; without it they use the slot's solar forecast.",
+          "car_connected_entity_id": "On while the car is plugged in. With it set, the car only charges on surplus while it is connected."
         }
       },
       "devices": {
@@ -94,7 +98,13 @@
         "data": {
           "battery_entity_id": "Battery SoC Entity (optional)",
           "battery_size_kwh": "Battery Capacity (kWh, optional)",
-          "roundtrip_loss_pct": "Round-trip Loss (%)"
+          "roundtrip_loss_pct": "Round-trip Loss (%)",
+          "solar_power_entity_id": "Live Solar Power (optional)",
+          "car_connected_entity_id": "Car Connected (optional)"
+        },
+        "data_description": {
+          "solar_power_entity_id": "Sensor with the solar power right now, in W or kW. Slot conditions on solar or surplus use it; without it they use the slot's solar forecast.",
+          "car_connected_entity_id": "On while the car is plugged in. With it set, the car only charges on surplus while it is connected."
         }
       },
       "devices": {
@@ -161,6 +171,12 @@
       },
       "ems_cycle_cost": {
         "name": "Battery cycle cost"
+      },
+      "ems_car_surplus_soc": {
+        "name": "Car surplus: battery above"
+      },
+      "ems_car_surplus_w": {
+        "name": "Car surplus: solar surplus above"
       }
     },
     "switch": {
@@ -169,6 +185,9 @@
       },
       "ems_allow_idle_for_optimize": {
         "name": "Allow Idle (Optimizer)"
+      },
+      "ems_car_on_surplus": {
+        "name": "Charge car on excess solar"
       }
     },
     "sensor": {

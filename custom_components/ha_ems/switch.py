@@ -11,7 +11,11 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import ENTITY_ALLOW_DISCHARGE, ENTITY_ALLOW_IDLE_FOR_OPTIMIZE
+from .const import (
+    ENTITY_ALLOW_DISCHARGE,
+    ENTITY_ALLOW_IDLE_FOR_OPTIMIZE,
+    ENTITY_CAR_ON_SURPLUS,
+)
 from .coordinator import EMSConfigEntry, EMSCoordinator
 
 
@@ -39,6 +43,14 @@ SWITCHES: tuple[EMSSwitchDescription, ...] = (
         translation_key=ENTITY_ALLOW_IDLE_FOR_OPTIMIZE,
         setting="allow_idle_for_optimize",
         icon="mdi:battery-clock",
+    ),
+    # Charge the car on solar surplus in slots nobody planned otherwise, once
+    # the battery is full enough (see the car surplus numbers).
+    EMSSwitchDescription(
+        key=ENTITY_CAR_ON_SURPLUS,
+        translation_key=ENTITY_CAR_ON_SURPLUS,
+        setting="car_on_surplus",
+        icon="mdi:car-electric",
     ),
 )
 

@@ -59,6 +59,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: EMSConfigEntry) -> bool:
     # (covers the case where it isn't available yet at startup)
     coordinator.async_start_price_tracking()
 
+    # Re-judge the current slot's conditions as SoC, solar and the car change.
+    coordinator.async_start_live_tracking()
+
     # Learn the house-load profile from the Energy dashboard's meters.
     coordinator.async_start_load_learning()
 

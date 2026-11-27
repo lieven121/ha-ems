@@ -18,6 +18,11 @@ CONF_BATTERY_ENTITY_ID = "battery_entity_id"
 CONF_BATTERY_SIZE_KWH = "battery_size_kwh"
 CONF_ROUNDTRIP_LOSS_PCT = "roundtrip_loss_pct"
 
+# Optional live sensors for slot conditions. Without a solar power entity the
+# slot's solar forecast stands in for the live value.
+CONF_SOLAR_POWER_ENTITY_ID = "solar_power_entity_id"
+CONF_CAR_CONNECTED_ENTITY_ID = "car_connected_entity_id"
+
 # Schedulable non-battery devices (heat pump, boiler, aircon, ...).
 # Stored on the config entry as a list of
 # {"name": str, "default_wattage": float, "switch_entity_id": str | None}
@@ -50,6 +55,8 @@ DEFAULT_MAX_BATTERY = 95.0
 DEFAULT_AVG_CONSUMPTION = 300.0
 DEFAULT_KWP = 3000.0  # watts — default max charge power from solar/inverter
 DEFAULT_DEVICE_WATTAGE = 2000.0  # watts — default draw for a scheduled device
+DEFAULT_CAR_SURPLUS_SOC = 98.0  # % — car charges on surplus once the battery is this full
+DEFAULT_CAR_SURPLUS_W = 1500.0  # W — ...and solar beats the house load by this much
 
 # ---------------------------------------------------------------------------
 # Action strings
@@ -71,6 +78,21 @@ ACTION_LABELS: dict[str, str] = {
 }
 
 # ---------------------------------------------------------------------------
+# Slot conditions
+# ---------------------------------------------------------------------------
+# action_config["when"] is a list of {"on": COND_*, "op": OP_*, "value": float},
+# all of which must hold; action_config["otherwise"] = {"action", "config"} is
+# what runs when they don't.
+COND_SOC = "soc"  # battery SoC, %
+COND_SOLAR = "solar"  # solar power, W
+COND_SURPLUS = "surplus"  # solar power minus expected house load, W
+CONDITIONS = [COND_SOC, COND_SOLAR, COND_SURPLUS]
+OP_ABOVE = "above"
+OP_BELOW = "below"
+OPS = [OP_ABOVE, OP_BELOW]
+MAX_CONDITIONS = 2
+
+# ---------------------------------------------------------------------------
 # Entity unique-id suffixes / names
 # ---------------------------------------------------------------------------
 ENTITY_MIN_BATTERY = "ems_min_battery"
@@ -81,6 +103,9 @@ ENTITY_ALLOW_IDLE_FOR_OPTIMIZE = "ems_allow_idle_for_optimize"
 ENTITY_KWP = "ems_kwp"
 ENTITY_MAX_DISCHARGE = "ems_max_discharge"
 ENTITY_CYCLE_COST = "ems_cycle_cost"
+ENTITY_CAR_ON_SURPLUS = "ems_car_on_surplus"
+ENTITY_CAR_SURPLUS_SOC = "ems_car_surplus_soc"
+ENTITY_CAR_SURPLUS_W = "ems_car_surplus_w"
 ENTITY_PLANNING = "ems_planning"
 ENTITY_CURRENT_ACTION = "ems_current_action"
 ENTITY_SOLAR_FORECAST = "ems_solar_forecast"
@@ -135,6 +160,8 @@ FIELD_MODE = "mode"
 FIELD_ACTION = "action"
 FIELD_SLOTS = "slots"
 FIELD_DEVICES = "devices"
+FIELD_WHEN = "when"
+FIELD_OTHERWISE = "otherwise"
 
 # ---------------------------------------------------------------------------
 # Event name
