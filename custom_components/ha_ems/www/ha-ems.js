@@ -191,6 +191,16 @@ header span{font-family:var(--code-font-family, monospace);font-size:10px;color:
 .params-panel{display:flex;flex-direction:column;gap:8px;}
 .action-params{display:flex;flex-direction:column;gap:6px;}
 .action-params[hidden]{display:none;}
+.watt-card{border:1px solid var(--border);border-radius:8px;transition:border-color .12s;}
+.watt-card.on{border-color:var(--wc-c,#888);}
+.watt-card-header{display:flex;align-items:center;gap:7px;padding:7px 10px;cursor:pointer;}
+.watt-card:hover{border-color:var(--wc-c,#888);}
+.watt-card-dot{width:8px;height:8px;border-radius:50%;background:var(--wc-c,#888);opacity:.35;flex-shrink:0;}
+.watt-card.on .watt-card-dot{opacity:1;}
+.watt-card-label{font-family:var(--code-font-family,monospace);font-size:11px;color:var(--text-dim);flex:1;}
+.watt-card.on .watt-card-label{color:var(--wc-c,#888);}
+.watt-card-body{display:none;flex-direction:column;gap:4px;padding:6px 10px 8px;border-top:1px solid var(--border);}
+.watt-card.on .watt-card-body{display:flex;}
 .param-row{display:flex;align-items:center;gap:7px;}
 .param-label{font-family:var(--code-font-family,monospace);font-size:9px;color:var(--text-dim);white-space:nowrap;min-width:76px;}
 .param-input{background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text-bright);font-family:var(--code-font-family,monospace);font-size:11px;padding:5px 8px;width:100%;min-width:0;transition:border-color .12s;}
@@ -354,7 +364,7 @@ header[hidden]{display:none;}
 }
 /* Touch: bigger targets, and 16px inputs so iOS doesn't zoom on focus */
 @media (hover:none){
-  .ap-btn,.toggle-btn,.af-other-btn{min-height:40px;}
+  .ap-btn,.toggle-btn,.af-other-btn,.watt-card-header{min-height:40px;}
   .ph-nav-btn,.ph-close,.ph-bulk-btn,.af-x{width:36px;height:36px;}
   .param-input,.af-select{font-size:16px;padding:6px 8px;}
   .be-threshold-handle{padding:6px 12px;font-size:11px;}
@@ -533,9 +543,17 @@ function toggle(id, label, on) {
     <div class="toggle-btn-dot"></div>${label}
   </button>`;
 }
+function wattCard(id, label, color, on, body) {
+  return `<div class="watt-card${on ? " on" : ""}" id="${id}" style="--wc-c:${color}">
+    <div class="watt-card-header"><div class="watt-card-dot"></div><span class="watt-card-label">${label}</span></div>
+    <div class="watt-card-body">${body}</div>
+  </div>`;
+}
 function actionFormHtml(p, action, cfg, kwpW) {
   const v = (a, key, fallback) => a === action ? cfg[key] ?? fallback : fallback;
   const shown = (a) => a === action ? "" : " hidden";
+  const carNet = v("car_charge", "use_net_wattage", 0);
+  const carBat = v("car_charge", "use_battery_wattage", 0);
   const buttons = ACTION_DEFS.map((a) => `<button class="ap-btn${action === a.key ? " sel" : ""}" data-action="${a.key}" style="--btn-c:${buttonColor(a)}">
       <div class="ap-dot" style="background:${a.color}"></div>${a.label}
     </button>`).join("");
@@ -556,9 +574,20 @@ function actionFormHtml(p, action, cfg, kwpW) {
       </div>
       <div class="action-params" data-params="car_charge"${shown("car_charge")}>
         ${toggle(`${p}-car-solar`, "\u2600 Use Solar", v("car_charge", "use_solar", true) !== false)}
-        ${paramRow("Grid", `${p}-car-net`, "W", v("car_charge", "use_net_wattage", 0), { min: -1e5, title: "Power the car takes from the grid; 0 = solar only" })}
-        ${paramRow("Battery", `${p}-car-bat`, "W", v("car_charge", "use_battery_wattage", 0), { min: -1e5, title: "+ the car draws from the house battery \xB7 \u2212 the house battery charges too \xB7 0 = left alone" })}
-        ${paramRow("Battery until", `${p}-car-bat-until`, "%", v("car_charge", "use_battery_until_pct", ""), { optional: true, max: 100, step: 1 })}
+        ${wattCard(
+    `${p}-car-net-card`,
+    "Grid",
+    "#2563eb",
+    carNet !== 0,
+    paramRow("Power", `${p}-car-net`, "W", carNet || kwpW, { min: -1e5, title: "Power the car takes from the grid" })
+  )}
+        ${wattCard(
+    `${p}-car-bat-card`,
+    "Battery",
+    "#7c3aed",
+    carBat !== 0,
+    paramRow("Power", `${p}-car-bat`, "W", carBat || kwpW, { min: -1e5, title: "+ the car draws from the house battery \xB7 \u2212 the house battery charges too" }) + paramRow("Until", `${p}-car-bat-until`, "%", v("car_charge", "use_battery_until_pct", ""), { optional: true, max: 100, step: 1 })
+  )}
       </div>
       <div class="af-cond" id="${p}-cond"></div>
     </div>
@@ -610,6 +639,7 @@ function wireActionForm(sr, p, action, cfg, kwpW) {
   };
   root.querySelectorAll(".ap-btn[data-action]").forEach((btn) => btn.addEventListener("click", () => select(btn.dataset.action)));
   root.querySelectorAll(".toggle-btn").forEach((btn) => btn.addEventListener("click", () => btn.classList.toggle("on")));
+  root.querySelectorAll(".watt-card-header").forEach((h) => h.addEventListener("click", () => h.parentElement.classList.toggle("on")));
   condEl.addEventListener("click", (e) => {
     const t = e.target;
     const row = t.closest("[data-ci]");
@@ -653,8 +683,8 @@ function wireActionForm(sr, p, action, cfg, kwpW) {
       if (max != null) f.max_wattage = max;
     } else if (selAction === "car_charge") {
       f.use_solar = isOn("car-solar");
-      f.use_net_wattage = num("car-net") ?? 0;
-      f.use_battery_wattage = num("car-bat") ?? 0;
+      f.use_net_wattage = isOn("car-net-card") ? num("car-net") ?? 0 : 0;
+      f.use_battery_wattage = isOn("car-bat-card") ? num("car-bat") ?? 0 : 0;
       const until = num("car-bat-until");
       if (until != null && f.use_battery_wattage !== 0) f.use_battery_until_pct = until;
     }
@@ -682,8 +712,10 @@ function wireActionForm(sr, p, action, cfg, kwpW) {
       setOn("net-solar", f.use_solar !== false);
     } else if (f.action === "car_charge") {
       setOn("car-solar", f.use_solar !== false);
-      set("car-net", f.use_net_wattage ?? 0);
-      set("car-bat", f.use_battery_wattage ?? 0);
+      setOn("car-net-card", !!f.use_net_wattage);
+      setOn("car-bat-card", !!f.use_battery_wattage);
+      if (f.use_net_wattage) set("car-net", f.use_net_wattage);
+      if (f.use_battery_wattage) set("car-bat", f.use_battery_wattage);
       set("car-bat-until", f.use_battery_until_pct);
     }
     conds = (f.when ?? []).map((c) => ({ ...c }));
@@ -1946,6 +1978,14 @@ var EmsDashboardCard = class extends HTMLElement {
     this._surplusEntities = {};
     // Bound once, so the same reference can be removed again.
     this._onKeyBound = (e) => this._onKey(e);
+    this._onPopStateBound = () => this._onPopState();
+    // History entries the dialog pushed: 1 for the slot dialog, 2 once bulk
+    // edit or the planner is open. The phone's back gesture steps back one.
+    this._histDepth = 0;
+    // Set while the dialog unwinds its own entries, so that popstate is ignored.
+    this._unwinding = false;
+    // The slot that bulk edit or the planner was opened from.
+    this._subFrom = 0;
     this.attachShadow({ mode: "open" });
     this._slots = [];
     this._filteredSlots = [];
@@ -2478,8 +2518,43 @@ var EmsDashboardCard = class extends HTMLElement {
     this._renderBrush();
     this._renderPopup(i);
     this.shadowRoot.getElementById("overlay").classList.add("open");
+    this._pushHistory(1);
+  }
+  /** Push a history entry for a dialog level, so back returns from it. */
+  _pushHistory(depth) {
+    if (this._histDepth >= depth) return;
+    history.pushState({ emsDialog: depth }, "");
+    this._histDepth = depth;
+  }
+  /** Back from bulk edit or the planner to the slot dialog. */
+  _backToSlot(fromIdx) {
+    if (this._histDepth === 2) {
+      history.back();
+      return;
+    }
+    this._renderPopup(fromIdx);
+  }
+  _onPopState() {
+    if (this._unwinding) {
+      this._unwinding = false;
+      return;
+    }
+    if (this._histDepth === 0) return;
+    if (this._histDepth === 2) {
+      this._histDepth = 1;
+      this._renderPopup(this._subFrom);
+      return;
+    }
+    this._histDepth = 0;
+    this._closePopup();
   }
   _closePopup() {
+    if (this._histDepth > 0) {
+      const depth = this._histDepth;
+      this._histDepth = 0;
+      this._unwinding = true;
+      history.go(-depth);
+    }
     this.shadowRoot.getElementById("overlay").classList.remove("open");
     this.shadowRoot.querySelectorAll(".slot").forEach((el) => el.classList.remove("hl"));
     this._activeIdx = null;
@@ -2562,6 +2637,8 @@ var EmsDashboardCard = class extends HTMLElement {
   }
   _openBulkEdit(fromIdx) {
     this._activeIdx = fromIdx;
+    this._subFrom = fromIdx;
+    this._pushHistory(2);
     this.shadowRoot.getElementById("tooltip").classList.remove("visible");
     renderBulkEdit({
       sr: this.shadowRoot,
@@ -2572,7 +2649,7 @@ var EmsDashboardCard = class extends HTMLElement {
       planningEntityId: this._planningEntityId,
       devColors: this._devColors,
       onClose: () => this._closePopup(),
-      onBack: () => this._renderPopup(fromIdx),
+      onBack: () => this._backToSlot(fromIdx),
       onApplied: () => {
         this._lastSer = "";
         this.hass = this._hass;
@@ -2581,6 +2658,8 @@ var EmsDashboardCard = class extends HTMLElement {
   }
   _openPlanner(fromIdx) {
     this._activeIdx = null;
+    this._subFrom = fromIdx;
+    this._pushHistory(2);
     this.shadowRoot.getElementById("tooltip").classList.remove("visible");
     renderPlanner({
       sr: this.shadowRoot,
@@ -2591,7 +2670,7 @@ var EmsDashboardCard = class extends HTMLElement {
       planningEntityId: this._planningEntityId,
       surplusEntities: this._surplusEntities,
       onClose: () => this._closePopup(),
-      onBack: () => this._renderPopup(fromIdx),
+      onBack: () => this._backToSlot(fromIdx),
       onApplied: () => {
         this._lastSer = "";
         this.hass = this._hass;
@@ -2700,9 +2779,13 @@ var EmsDashboardCard = class extends HTMLElement {
   }
   connectedCallback() {
     document.addEventListener("keydown", this._onKeyBound);
+    window.addEventListener("popstate", this._onPopStateBound);
   }
   disconnectedCallback() {
     document.removeEventListener("keydown", this._onKeyBound);
+    window.removeEventListener("popstate", this._onPopStateBound);
+    this._histDepth = 0;
+    this._unwinding = false;
   }
 };
 

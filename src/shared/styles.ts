@@ -190,6 +190,16 @@ header span{font-family:var(--code-font-family, monospace);font-size:10px;color:
 .params-panel{display:flex;flex-direction:column;gap:8px;}
 .action-params{display:flex;flex-direction:column;gap:6px;}
 .action-params[hidden]{display:none;}
+.watt-card{border:1px solid var(--border);border-radius:8px;transition:border-color .12s;}
+.watt-card.on{border-color:var(--wc-c,#888);}
+.watt-card-header{display:flex;align-items:center;gap:7px;padding:7px 10px;cursor:pointer;}
+.watt-card:hover{border-color:var(--wc-c,#888);}
+.watt-card-dot{width:8px;height:8px;border-radius:50%;background:var(--wc-c,#888);opacity:.35;flex-shrink:0;}
+.watt-card.on .watt-card-dot{opacity:1;}
+.watt-card-label{font-family:var(--code-font-family,monospace);font-size:11px;color:var(--text-dim);flex:1;}
+.watt-card.on .watt-card-label{color:var(--wc-c,#888);}
+.watt-card-body{display:none;flex-direction:column;gap:4px;padding:6px 10px 8px;border-top:1px solid var(--border);}
+.watt-card.on .watt-card-body{display:flex;}
 .param-row{display:flex;align-items:center;gap:7px;}
 .param-label{font-family:var(--code-font-family,monospace);font-size:9px;color:var(--text-dim);white-space:nowrap;min-width:76px;}
 .param-input{background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text-bright);font-family:var(--code-font-family,monospace);font-size:11px;padding:5px 8px;width:100%;min-width:0;transition:border-color .12s;}
@@ -353,7 +363,7 @@ header[hidden]{display:none;}
 }
 /* Touch: bigger targets, and 16px inputs so iOS doesn't zoom on focus */
 @media (hover:none){
-  .ap-btn,.toggle-btn,.af-other-btn{min-height:40px;}
+  .ap-btn,.toggle-btn,.af-other-btn,.watt-card-header{min-height:40px;}
   .ph-nav-btn,.ph-close,.ph-bulk-btn,.af-x{width:36px;height:36px;}
   .param-input,.af-select{font-size:16px;padding:6px 8px;}
   .be-threshold-handle{padding:6px 12px;font-size:11px;}

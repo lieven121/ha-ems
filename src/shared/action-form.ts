@@ -77,11 +77,23 @@ function toggle(id: string, label: string, on: boolean): string {
   </button>`;
 }
 
+/** A card that switches one power source on; its inputs show while it is on. */
+function wattCard(id: string, label: string, color: string, on: boolean, body: string): string {
+  return `<div class="watt-card${on ? ' on' : ''}" id="${id}" style="--wc-c:${color}">
+    <div class="watt-card-header"><div class="watt-card-dot"></div><span class="watt-card-label">${label}</span></div>
+    <div class="watt-card-body">${body}</div>
+  </div>`;
+}
+
 /** Form markup; element ids start with *p* so two forms never clash. */
 export function actionFormHtml(p: string, action: string, cfg: Record<string, any>, kwpW: number): string {
   // A slot's stored settings only fill the panel of its own action.
   const v = (a: string, key: string, fallback: unknown) => (a === action ? cfg[key] ?? fallback : fallback);
   const shown = (a: string) => (a === action ? '' : ' hidden');
+  // A source is on when it has a non-zero wattage; while off, its field
+  // keeps the kWp as a starting value for when it is switched on.
+  const carNet = v('car_charge', 'use_net_wattage', 0);
+  const carBat = v('car_charge', 'use_battery_wattage', 0);
   const buttons = ACTION_DEFS.map(a =>
     `<button class="ap-btn${action === a.key ? ' sel' : ''}" data-action="${a.key}" style="--btn-c:${buttonColor(a)}">
       <div class="ap-dot" style="background:${a.color}"></div>${a.label}
@@ -103,9 +115,11 @@ export function actionFormHtml(p: string, action: string, cfg: Record<string, an
       </div>
       <div class="action-params" data-params="car_charge"${shown('car_charge')}>
         ${toggle(`${p}-car-solar`, '☀ Use Solar', v('car_charge', 'use_solar', true) !== false)}
-        ${paramRow('Grid', `${p}-car-net`, 'W', v('car_charge', 'use_net_wattage', 0), { min: -100000, title: 'Power the car takes from the grid; 0 = solar only' })}
-        ${paramRow('Battery', `${p}-car-bat`, 'W', v('car_charge', 'use_battery_wattage', 0), { min: -100000, title: '+ the car draws from the house battery · − the house battery charges too · 0 = left alone' })}
-        ${paramRow('Battery until', `${p}-car-bat-until`, '%', v('car_charge', 'use_battery_until_pct', ''), { optional: true, max: 100, step: 1 })}
+        ${wattCard(`${p}-car-net-card`, 'Grid', '#2563eb', carNet !== 0,
+          paramRow('Power', `${p}-car-net`, 'W', carNet || kwpW, { min: -100000, title: 'Power the car takes from the grid' }))}
+        ${wattCard(`${p}-car-bat-card`, 'Battery', '#7c3aed', carBat !== 0,
+          paramRow('Power', `${p}-car-bat`, 'W', carBat || kwpW, { min: -100000, title: '+ the car draws from the house battery · − the house battery charges too' })
+          + paramRow('Until', `${p}-car-bat-until`, '%', v('car_charge', 'use_battery_until_pct', ''), { optional: true, max: 100, step: 1 }))}
       </div>
       <div class="af-cond" id="${p}-cond"></div>
     </div>
@@ -180,6 +194,9 @@ export function wireActionForm(
     btn.addEventListener('click', () => select((btn as HTMLElement).dataset.action!)));
   root.querySelectorAll('.toggle-btn').forEach(btn =>
     btn.addEventListener('click', () => btn.classList.toggle('on')));
+  // Tapping a card's header switches it; tapping its inputs doesn't.
+  root.querySelectorAll('.watt-card-header').forEach(h =>
+    h.addEventListener('click', () => h.parentElement!.classList.toggle('on')));
 
   // The condition rows are re-rendered, so listen on their container.
   condEl.addEventListener('click', (e: Event) => {
@@ -226,8 +243,8 @@ export function wireActionForm(
       if (max != null) f.max_wattage = max;
     } else if (selAction === 'car_charge') {
       f.use_solar = isOn('car-solar');
-      f.use_net_wattage = num('car-net') ?? 0;
-      f.use_battery_wattage = num('car-bat') ?? 0;
+      f.use_net_wattage = isOn('car-net-card') ? num('car-net') ?? 0 : 0;
+      f.use_battery_wattage = isOn('car-bat-card') ? num('car-bat') ?? 0 : 0;
       const until = num('car-bat-until');
       if (until != null && f.use_battery_wattage !== 0) f.use_battery_until_pct = until;
     }
@@ -253,8 +270,10 @@ export function wireActionForm(
       setOn('net-solar', f.use_solar !== false);
     } else if (f.action === 'car_charge') {
       setOn('car-solar', f.use_solar !== false);
-      set('car-net', f.use_net_wattage ?? 0);
-      set('car-bat', f.use_battery_wattage ?? 0);
+      setOn('car-net-card', !!f.use_net_wattage);
+      setOn('car-bat-card', !!f.use_battery_wattage);
+      if (f.use_net_wattage) set('car-net', f.use_net_wattage);
+      if (f.use_battery_wattage) set('car-bat', f.use_battery_wattage);
       set('car-bat-until', f.use_battery_until_pct);
     }
     conds = (f.when ?? []).map((c: Condition) => ({ ...c }));
