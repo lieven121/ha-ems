@@ -29,6 +29,14 @@ export class EmsDashboardCard extends HTMLElement {
   private _lastStates: unknown[];
   // Bound once, so the same reference can be removed again.
   private readonly _onKeyBound = (e: KeyboardEvent) => this._onKey(e);
+  private readonly _onPopStateBound = () => this._onPopState();
+  // History entries the dialog pushed: 1 for the slot dialog, 2 once bulk
+  // edit or the planner is open. The phone's back gesture steps back one.
+  private _histDepth = 0;
+  // Set while the dialog unwinds its own entries, so that popstate is ignored.
+  private _unwinding = false;
+  // The slot that bulk edit or the planner was opened from.
+  private _subFrom = 0;
 
   constructor() {
     super();
@@ -623,9 +631,46 @@ export class EmsDashboardCard extends HTMLElement {
     this._renderBrush();
     this._renderPopup(i);
     this.shadowRoot!.getElementById('overlay')!.classList.add('open');
+    this._pushHistory(1);
+  }
+
+  /** Push a history entry for a dialog level, so back returns from it. */
+  _pushHistory(depth: number) {
+    if (this._histDepth >= depth) return;
+    history.pushState({ emsDialog: depth }, '');
+    this._histDepth = depth;
+  }
+
+  /** Back from bulk edit or the planner to the slot dialog. */
+  _backToSlot(fromIdx: number) {
+    if (this._histDepth === 2) {
+      // popstate renders the slot dialog.
+      history.back();
+      return;
+    }
+    this._renderPopup(fromIdx);
+  }
+
+  _onPopState() {
+    if (this._unwinding) { this._unwinding = false; return; }
+    if (this._histDepth === 0) return;
+    if (this._histDepth === 2) {
+      this._histDepth = 1;
+      this._renderPopup(this._subFrom);
+      return;
+    }
+    this._histDepth = 0;
+    this._closePopup();
   }
 
   _closePopup() {
+    // Drop the entries the dialog pushed, so the next back leaves the page as usual.
+    if (this._histDepth > 0) {
+      const depth = this._histDepth;
+      this._histDepth = 0;
+      this._unwinding = true;
+      history.go(-depth);
+    }
     this.shadowRoot!.getElementById('overlay')!.classList.remove('open');
     this.shadowRoot!.querySelectorAll('.slot').forEach(el => el.classList.remove('hl'));
     this._activeIdx = null;
@@ -710,6 +755,8 @@ export class EmsDashboardCard extends HTMLElement {
     // The overlay is already open (bulk edit is reached from the slot dialog);
     // this only swaps the popup content in place.
     this._activeIdx = fromIdx;
+    this._subFrom = fromIdx;
+    this._pushHistory(2);
     this.shadowRoot!.getElementById('tooltip')!.classList.remove('visible');
     renderBulkEdit({
       sr: this.shadowRoot!,
@@ -720,7 +767,7 @@ export class EmsDashboardCard extends HTMLElement {
       planningEntityId: this._planningEntityId,
       devColors: this._devColors,
       onClose: () => this._closePopup(),
-      onBack: () => this._renderPopup(fromIdx),
+      onBack: () => this._backToSlot(fromIdx),
       onApplied: () => {
         // Force re-render by clearing serialization cache
         this._lastSer = '';
@@ -733,6 +780,8 @@ export class EmsDashboardCard extends HTMLElement {
     // Like bulk edit, the planner is reached from the slot dialog and swaps
     // the popup content in place.
     this._activeIdx = null;
+    this._subFrom = fromIdx;
+    this._pushHistory(2);
     this.shadowRoot!.getElementById('tooltip')!.classList.remove('visible');
     renderPlanner({
       sr: this.shadowRoot!,
@@ -743,7 +792,7 @@ export class EmsDashboardCard extends HTMLElement {
       planningEntityId: this._planningEntityId,
       surplusEntities: this._surplusEntities,
       onClose: () => this._closePopup(),
-      onBack: () => this._renderPopup(fromIdx),
+      onBack: () => this._backToSlot(fromIdx),
       onApplied: () => {
         this._lastSer = '';
         this.hass = this._hass;
@@ -841,9 +890,15 @@ export class EmsDashboardCard extends HTMLElement {
 
   connectedCallback() {
     document.addEventListener('keydown', this._onKeyBound);
+    window.addEventListener('popstate', this._onPopStateBound);
   }
 
   disconnectedCallback() {
     document.removeEventListener('keydown', this._onKeyBound);
+    window.removeEventListener('popstate', this._onPopStateBound);
+    // Leaving the view with the dialog open: its entries stay behind as
+    // plain same-page entries, which is harmless.
+    this._histDepth = 0;
+    this._unwinding = false;
   }
 }
